@@ -4,7 +4,7 @@ class GithubTagsBridge extends BridgeAbstract {
 	const MAINTAINER = 'floviolleau';
 	const NAME = 'Github Tags';
 	const URI = 'https://api.github.com/repos/';
-	const CACHE_TIMEOUT = 0;//600; // 10min
+	const CACHE_TIMEOUT = 7200;
 	const DESCRIPTION = 'Returns the tags of a github project';
 
 	const PARAMETERS = array(array(
