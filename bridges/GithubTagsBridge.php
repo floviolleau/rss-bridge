@@ -68,7 +68,7 @@ class GithubTagsBridge extends BridgeAbstract {
         );
 
 	    $content = getContents($url, $header, $opts)
-            or returnServerError('Could not request Githup api . Tried: ' . $url);
+            or returnServerError('Could not request Github api . Tried: ' . $url);
 
         $json = json_decode($content);
 
