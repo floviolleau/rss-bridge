@@ -4,7 +4,7 @@ class GithubLastCommitBranchBridge extends BridgeAbstract {
 	const MAINTAINER = 'floviolleau';
 	const NAME = 'Github Last commit of branch';
 	const URI = 'https://api.github.com/repos/';
-	const CACHE_TIMEOUT = 0;
+	const CACHE_TIMEOUT = 7200;
 	const DESCRIPTION = 'Returns the last commit of a branch of a github project';
 
 	const PARAMETERS = array(array(
