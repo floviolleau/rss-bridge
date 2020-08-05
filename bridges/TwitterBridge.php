@@ -177,7 +177,7 @@ EOD
 			return self::API_URI
 			. '/2/search/adaptive.json?q='
 			. urlencode($this->getInput('q'))
-			. '&tweet_mode=extended';
+			. '&tweet_mode=extended&tweet_search_mode=live';
 		case 'By username':
 			return self::API_URI
 			. '/2/timeline/profile/'
@@ -374,7 +374,7 @@ EOD;
 		$data = $cache->loadData();
 
 		$apiKey = null;
-		if($data === null || !is_array($data) || count($data) != 1) {
+		if($data === null || (time() - $refresh) > self::GUEST_TOKEN_EXPIRY) {
 			$twitterPage = getContents('https://twitter.com');
 
 			$jsMainRegex = '/(https:\/\/abs\.twimg\.com\/responsive-web\/web_legacy\/main\.[^\.]+\.js)/m';
