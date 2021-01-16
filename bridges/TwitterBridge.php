@@ -75,6 +75,12 @@ EOD
 				'required' => false,
 				'type' => 'checkbox',
 				'title' => 'Hide retweets'
+			),
+			'nopinned' => array(
+				'name' => 'Without pinned tweet',
+				'required' => false,
+				'type' => 'checkbox',
+				'title' => 'Hide pinned tweet'
 			)
 		),
 		'By list' => array(
@@ -246,6 +252,14 @@ EOD
 			return $carry;
 		}, array());
 
+		$hidePinned = $this->getInput('nopinned');
+		if ($hidePinned) {
+			$pinnedTweetId = null;
+			if (isset($data->timeline->instructions[1]) && isset($data->timeline->instructions[1]->pinEntry)) {
+				$pinnedTweetId = $data->timeline->instructions[1]->pinEntry->entry->content->item->content->tweet->id;
+			}
+		}
+
 		foreach($data->globalObjects->tweets as $tweet) {
 
 			/* Debug::log('>>> ' . json_encode($tweet)); */
@@ -259,6 +273,11 @@ EOD
 				continue;
 			}
 
+			// Skip pinned tweet
+			if ($hidePinned && $tweet->id_str === $pinnedTweetId) {
+				continue;
+			}
+
 			$item = array();
 			// extract username and sanitize
 			$user_info = $this->getUserInformation($tweet->user_id_str, $data->globalObjects);
@@ -266,7 +285,7 @@ EOD
 			$item['username'] = $user_info->screen_name;
 			$item['fullname'] = $user_info->name;
 			$item['author'] = $item['fullname'] . ' (@' . $item['username'] . ')';
-			if (null !== $this->getInput('u') && $item['username'] != $this->getInput('u')) {
+			if (null !== $this->getInput('u') && strtolower($item['username']) != strtolower($this->getInput('u'))) {
 				$item['author'] .= ' RT: @' . $this->getInput('u');
 			}
 			$item['avatar'] = $user_info->profile_image_url_https;
@@ -388,7 +407,7 @@ EOD;
 					}
 					break;
 				case 'By username':
-					if ($this->getInput('noretweet') && $item['username'] != $this->getInput('u')) {
+					if ($this->getInput('noretweet') && strtolower($item['username']) != strtolower($this->getInput('u'))) {
 						continue 2; // switch + for-loop!
 					}
 					break;
