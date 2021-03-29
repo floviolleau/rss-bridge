@@ -21,6 +21,19 @@ class FirefoxAddonsBridge extends BridgeAbstract {
 	private $xpiFileRegex = '/([A-Za-z0-9_.-]+)\.xpi$/';
 	private $outgoingRegex = '/https:\/\/outgoing.prod.mozaws.net\/v1\/(?:[A-z0-9]+)\//';
 
+	private $urlRegex = '/addons\.mozilla\.org\/(?:[\w-]+\/)?firefox\/addon\/([\w-]+)/';
+
+	public function detectParameters($url) {
+		$params = array();
+
+		if(preg_match($this->urlRegex, $url, $matches)) {
+			$params['id'] = $matches[1];
+			return $params;
+		}
+
+		return null;
+	}
+
 	public function collectData() {
 		$html = getSimpleHTMLDOM($this->getURI())
 			or returnServerError('Could not request: ' . $this->getURI());
@@ -32,6 +45,7 @@ class FirefoxAddonsBridge extends BridgeAbstract {
 			$item = array();
 
 			$item['title'] = $div->find('h2.AddonVersionCard-version', 0)->plaintext;
+			$item['uid'] = $item['title'];
 			$item['uri'] = $this->getURI();
 			$item['author'] = $author;
 
