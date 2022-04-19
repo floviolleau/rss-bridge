@@ -15,7 +15,7 @@ class GelbooruBridge extends BridgeAbstract {
 			),
 			't' => array(
 				'name' => 'tags',
-				'exampleValue' => 'pinup',
+				'exampleValue' => 'solo',
 				'title' => 'Tags to search for'
 			),
 			'l' => array(
@@ -68,6 +68,7 @@ class GelbooruBridge extends BridgeAbstract {
 
 	public function collectData(){
 		$content = getContents($this->getFullURI());
+		// $content is empty string
 
 		// Most other Gelbooru-based boorus put their content in the root of
 		// the JSON. This check is here for Bridges that inherit from this one
