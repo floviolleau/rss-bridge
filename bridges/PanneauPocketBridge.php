@@ -57,13 +57,15 @@ class PanneauPocketBridge extends BridgeAbstract {
 			$publicationUrl = $itemDom->find('a.dropdown-item.item-twitter', 0)->href;
 			$publicationUrl = str_replace('https://twitter.com/intent/tweet?url=', '', $publicationUrl);
 			$publicationUrl = str_replace('&text=', '', $publicationUrl);
-			$publicationTitle = $itemDom->find('.sign-preview__content', 0)->innerText();
-			$publicationTitle = trim(strip_tags($publicationTitle));
+			$publicationTitle = $itemDom->find('.sign-preview__content .title', 0)->innerText();
+			$publicationContent = $itemDom->find('.sign-preview__content .content', 0)->innerText();
+			$publicationContent = str_replace('><', '> <', $publicationContent);
+			$publicationContent = trim(strip_tags($publicationContent));
 
 			$item['uri'] = $publicationUrl;
-			$item['title'] = $publicationTitle;
+			$item['title'] = $publicationTitle . $publicationContent;
 			$item['author'] = 'floviolleau';
-			$item['content'] = $publicationTitle;
+			$item['content'] = $publicationContent;
 			$item['uid'] = hash('sha256', strtolower($this->clean($item['title'])));
 
 			$this->items[] = $item;
