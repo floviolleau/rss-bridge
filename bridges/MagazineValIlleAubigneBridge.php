@@ -6,7 +6,7 @@ class MagazineValIlleAubigneBridge extends BridgeAbstract {
 	const DESCRIPTION = "Fetches the latest Magazine of Val d'Ille d'Aubigné from valdille-aubigne.fr";
 	const MAINTAINER = 'floviolleau';
 	const PARAMETERS = array();
-	const CACHE_TIMEOUT = 7200;
+	const CACHE_TIMEOUT = 18000;
 
 	private function clean($string) {
 		$string = str_replace(' ', '-', $string);
@@ -21,8 +21,15 @@ class MagazineValIlleAubigneBridge extends BridgeAbstract {
 		$containerDom = $html->find('.grid-wrapper', 0);
 		$publicationNumberDom = $containerDom->find('.content-box');
 		foreach($publicationNumberDom as $key => $value) {
-			$publicationNumberUrl = $value->find('a', 0)->href;
-			$publicationNumberTitle = $value->find('h4', 0)->innerText();
+			$publicationNumberUrl = $value->find('a.btn-via-default', 0)->href;
+
+            $publicationNumberTitle = '';
+            if ($value->find('h4', 0)) {
+    			$publicationNumberTitle = $value->find('h4', 0)->innerText();
+            } else {
+    			$publicationNumberTitle = $value->find('p strong', 0)->innerText();
+            }
+
 			$message = "Nouveau numéro disponible du magazine Val d'Ille d'Aubigné : $publicationNumberTitle";
 			$item['uri'] = $publicationNumberUrl;
 			$item['title'] = $message;
