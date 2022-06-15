@@ -1,5 +1,9 @@
 <?php
 
+namespace RssBridge\Tests\Actions;
+
+use ActionFactory;
+use BridgeFactory;
 use PHPUnit\Framework\TestCase;
 
 class ListActionTest extends TestCase {
@@ -41,7 +45,6 @@ class ListActionTest extends TestCase {
 		);
 
 		$bridgeFac = new BridgeFactory();
-		$bridgeFac->setWorkingDir(PATH_LIB_BRIDGES);
 
 		$this->assertEquals(
 			count($bridgeFac->getBridgeNames()),
