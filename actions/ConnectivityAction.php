@@ -1,4 +1,5 @@
 <?php
+
 /**
  * This file is part of RSS-Bridge, a PHP project capable of generating RSS and
  * Atom feeds for websites that don't have one.
@@ -6,9 +7,9 @@
  * For the full license information, please view the UNLICENSE file distributed
  * with this source code.
  *
- * @package	Core
- * @license	http://unlicense.org/ UNLICENSE
- * @link	https://github.com/rss-bridge/rss-bridge
+ * @package Core
+ * @license http://unlicense.org/ UNLICENSE
+ * @link    https://github.com/rss-bridge/rss-bridge
  */
 
 /**
@@ -21,84 +22,95 @@
  * - Returns a responsive web page that automatically checks all whitelisted
  * bridges (using JavaScript) if no bridge is specified.
  */
-class ConnectivityAction extends ActionAbstract {
-	public function execute() {
+class ConnectivityAction implements ActionInterface
+{
+    private BridgeFactory $bridgeFactory;
 
-		if(!Debug::isEnabled()) {
-			returnError('This action is only available in debug mode!', 400);
-		}
+    public function __construct()
+    {
+        $this->bridgeFactory = new \BridgeFactory();
+    }
 
-		if(!isset($this->userData['bridge'])) {
-			$this->returnEntryPage();
-			return;
-		}
+    public function execute(array $request)
+    {
+        if (!Debug::isEnabled()) {
+            returnError('This action is only available in debug mode!', 400);
+        }
 
-		$bridgeName = $this->userData['bridge'];
+        if (!isset($request['bridge'])) {
+            $this->returnEntryPage();
+            return;
+        }
 
-		$this->reportBridgeConnectivity($bridgeName);
+        $bridgeName = $request['bridge'];
 
-	}
+        $bridgeClassName = $this->bridgeFactory->sanitizeBridgeName($bridgeName);
 
-	/**
-	 * Generates a report about the bridge connectivity status and sends it back
-	 * to the user.
-	 *
-	 * The report is generated as Json-formatted string in the format
-	 * {
-	 *   "bridge": "<bridge-name>",
-	 *   "successful": true/false
-	 * }
-	 *
-	 * @param string $bridgeName Name of the bridge to generate the report for
-	 * @return void
-	 */
-	private function reportBridgeConnectivity($bridgeName) {
+        if ($bridgeClassName === null) {
+            throw new \InvalidArgumentException('Bridge name invalid!');
+        }
 
-		$bridgeFac = new \BridgeFactory();
+        $this->reportBridgeConnectivity($bridgeClassName);
+    }
 
-		if(!$bridgeFac->isWhitelisted($bridgeName)) {
-			header('Content-Type: text/html');
-			returnServerError('Bridge is not whitelisted!');
-		}
+    /**
+     * Generates a report about the bridge connectivity status and sends it back
+     * to the user.
+     *
+     * The report is generated as Json-formatted string in the format
+     * {
+     *   "bridge": "<bridge-name>",
+     *   "successful": true/false
+     * }
+     *
+     * @param class-string<BridgeInterface> $bridgeClassName Name of the bridge to generate the report for
+     * @return void
+     */
+    private function reportBridgeConnectivity($bridgeClassName)
+    {
+        if (!$this->bridgeFactory->isWhitelisted($bridgeClassName)) {
+            header('Content-Type: text/html');
+            returnServerError('Bridge is not whitelisted!');
+        }
 
-		header('Content-Type: text/json');
+        header('Content-Type: text/json');
 
-		$retVal = array(
-			'bridge' => $bridgeName,
-			'successful' => false,
-			'http_code' => 200,
-		);
+        $retVal = [
+            'bridge' => $bridgeClassName,
+            'successful' => false,
+            'http_code' => 200,
+        ];
 
-		$bridge = $bridgeFac->create($bridgeName);
+        $bridge = $this->bridgeFactory->create($bridgeClassName);
 
-		if($bridge === false) {
-			echo json_encode($retVal);
-			return;
-		}
+        if ($bridge === false) {
+            echo json_encode($retVal);
+            return;
+        }
 
-		$curl_opts = array(
-			CURLOPT_CONNECTTIMEOUT => 5
-		);
+        $curl_opts = [
+            CURLOPT_CONNECTTIMEOUT => 5
+        ];
 
-		try {
-			$reply = getContents($bridge::URI, array(), $curl_opts, true);
+        try {
+            $reply = getContents($bridge::URI, [], $curl_opts, true);
 
-			if($reply['code'] === 200) {
-				$retVal['successful'] = true;
-				if (strpos(implode('', $reply['status_lines']), '301 Moved Permanently')) {
-					$retVal['http_code'] = 301;
-				}
-			}
-		} catch(Exception $e) {
-			$retVal['successful'] = false;
-		}
+            if ($reply['code'] === 200) {
+                $retVal['successful'] = true;
+                if (strpos(implode('', $reply['status_lines']), '301 Moved Permanently')) {
+                    $retVal['http_code'] = 301;
+                }
+            }
+        } catch (Exception $e) {
+            $retVal['successful'] = false;
+        }
 
-		echo json_encode($retVal);
+        echo json_encode($retVal);
+    }
 
-	}
-
-	private function returnEntryPage() {
-	echo <<<EOD
+    private function returnEntryPage()
+    {
+        echo <<<EOD
 <!DOCTYPE html>
 
 <html>
@@ -129,5 +141,5 @@ class ConnectivityAction extends ActionAbstract {
 	</body>
 </html>
 EOD;
-	}
+    }
 }
