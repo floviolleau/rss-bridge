@@ -55,7 +55,7 @@ class SoundCloudBridge extends BridgeAbstract
 
         foreach ($apiItems->collection as $index => $apiItem) {
             if (in_array($this->getInput('t'), $hasTrackObject) === true) {
-                $apiItem = $apiItem->track;
+                $apiItem = $apiItem->playlist ?? $apiItem->track;
             }
 
             $item = [];
@@ -125,7 +125,7 @@ HTML;
         $cacheFactory = new CacheFactory();
 
         $this->clientIDCache = $cacheFactory->create();
-        $this->clientIDCache->setScope(get_called_class());
+        $this->clientIDCache->setScope('SoundCloudBridge');
         $this->clientIDCache->setKey(['client_id']);
     }
 

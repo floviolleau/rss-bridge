@@ -9,23 +9,30 @@ use PHPUnit\Framework\TestCase;
 
 final class ConfigurationTest extends TestCase
 {
-    public function test()
+    public function testValueFromDefaultConfig()
     {
-        putenv('RSSBRIDGE_system_timezone=Europe/Berlin');
         Configuration::loadConfiguration();
-
-        // test nonsense
         $this->assertSame(null, Configuration::getConfig('foobar', ''));
         $this->assertSame(null, Configuration::getConfig('foo', 'bar'));
         $this->assertSame(null, Configuration::getConfig('cache', ''));
+        $this->assertSame('UTC', Configuration::getConfig('system', 'timezone'));
+    }
 
-        // test value from env
+    public function testValueFromCustomConfig()
+    {
+        Configuration::loadConfiguration(['system' => ['timezone' => 'Europe/Berlin']]);
         $this->assertSame('Europe/Berlin', Configuration::getConfig('system', 'timezone'));
+    }
 
-        // test real values
-        $this->assertSame('file', Configuration::getConfig('cache', 'type'));
-        $this->assertSame(false, Configuration::getConfig('authentication', 'enable'));
-        $this->assertSame(true, Configuration::getConfig('admin', 'donations'));
-        $this->assertSame(1, Configuration::getConfig('error', 'report_limit'));
+    public function testValueFromEnv()
+    {
+        putenv('RSSBRIDGE_system_timezone=Europe/Berlin');
+        putenv('RSSBRIDGE_TwitterV2Bridge_twitterv2apitoken=aaa');
+        putenv('RSSBRIDGE_SQLiteCache_file=bbb');
+        Configuration::loadConfiguration([], getenv());
+        $this->assertSame('Europe/Berlin', Configuration::getConfig('system', 'timezone'));
+        $this->assertSame('aaa', Configuration::getConfig('TwitterV2Bridge', 'twitterv2apitoken'));
+        $this->assertSame('bbb', Configuration::getConfig('SQLiteCache', 'file'));
+        $this->assertSame('bbb', Configuration::getConfig('sqlitecache', 'file'));
     }
 }

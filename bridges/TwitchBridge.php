@@ -30,13 +30,6 @@ class TwitchBridge extends BridgeAbstract
         ]
     ]];
 
-    /*
-     * Official instructions for obtaining your own client ID can be found here:
-     * https://dev.twitch.tv/docs/v5/#getting-a-client-id
-     */
-    const CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
-
-    const API_ENDPOINT = 'https://gql.twitch.tv/gql';
     const BROADCAST_TYPES = [
         'all' => [
             'ARCHIVE',
@@ -91,12 +84,16 @@ query VODList($channel: String!, $types: [BroadcastType!]) {
   }
 }
 EOD;
+        $channel = $this->getInput('channel');
+        $type = $this->getInput('type');
         $variables = [
-            'channel' => $this->getInput('channel'),
-            'types' => self::BROADCAST_TYPES[$this->getInput('type')]
+            'channel' => $channel,
+            'types' => self::BROADCAST_TYPES[$type]
         ];
         $data = $this->apiRequest($query, $variables);
-
+        if ($data->user === null) {
+            throw new \Exception(sprintf('Unable to find channel `%s`', $channel));
+        }
         $user = $data->user;
         foreach ($user->videos->edges as $edge) {
             $video = $edge->node;
@@ -214,8 +211,12 @@ EOD;
             'query' => $query,
             'variables' => $variables
         ];
+        /**
+         * Official instructions for obtaining your own client ID can be found here:
+         * https://dev.twitch.tv/docs/v5/#getting-a-client-id
+         */
         $header = [
-            'Client-ID: ' . self::CLIENT_ID
+            'Client-ID: kimne78kx3ncx6brgo4mv6wki5h1ko'
         ];
         $opts = [
             CURLOPT_CUSTOMREQUEST => 'POST',
@@ -223,17 +224,13 @@ EOD;
         ];
 
         Debug::log("Sending GraphQL query:\n" . $query);
-        Debug::log("Sending GraphQL variables:\n"
-            . json_encode($variables, JSON_PRETTY_PRINT));
-
-        $response = json_decode(getContents(self::API_ENDPOINT, $header, $opts));
-
-        Debug::log("Got GraphQL response:\n"
-            . json_encode($response, JSON_PRETTY_PRINT));
+        Debug::log("Sending GraphQL variables:\n" . json_encode($variables, JSON_PRETTY_PRINT));
+        $response = json_decode(getContents('https://gql.twitch.tv/gql', $header, $opts));
+        Debug::log("Got GraphQL response:\n" . json_encode($response, JSON_PRETTY_PRINT));
 
         if (isset($response->errors)) {
             $messages = array_column($response->errors, 'message');
-            returnServerError('API error(s): ' . implode("\n", $messages));
+            throw new \Exception(sprintf('twitch api: `%s`', implode("\n", $messages)));
         }
 
         return $response->data;

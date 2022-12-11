@@ -154,27 +154,17 @@ class FeedItem
                 Debug::log('The item provided as URI is unknown!');
             }
         }
-
         if (!is_string($uri)) {
-            Debug::log('URI must be a string!');
-        } elseif (
-            !filter_var(
-                $uri,
-                FILTER_VALIDATE_URL,
-                FILTER_FLAG_PATH_REQUIRED
-            )
-        ) {
-            Debug::log('URI must include a scheme, host and path!');
-        } else {
-            $scheme = parse_url($uri, PHP_URL_SCHEME);
-
-            if ($scheme !== 'http' && $scheme !== 'https') {
-                Debug::log('URI scheme must be "http" or "https"!');
-            } else {
-                $this->uri = trim($uri);
-            }
+            Debug::log(sprintf('Expected $uri to be string but got %s', gettype($uri)));
+            return $this;
         }
-
+        $uri = trim($uri);
+        // Intentionally doing a weak url validation here because FILTER_VALIDATE_URL is too strict
+        if (!preg_match('#^https?://#i', $uri)) {
+            Debug::log(sprintf('Not a valid url: "%s"', $uri));
+            return $this;
+        }
+        $this->uri = $uri;
         return $this;
     }
 
@@ -207,7 +197,7 @@ class FeedItem
         if (!is_string($title)) {
             Debug::log('Title must be a string!');
         } else {
-            $this->title = trim($title);
+            $this->title = truncate(trim($title));
         }
 
         return $this;
@@ -314,8 +304,7 @@ class FeedItem
      *
      * Use {@see FeedItem::getContent()} to get the current item content.
      *
-     * @param string|object $content The item content as text or simple_html_dom
-     * object.
+     * @param string|object $content The item content as text or simple_html_dom object.
      * @return self
      */
     public function setContent($content)
@@ -329,10 +318,10 @@ class FeedItem
             $content = (string)$content;
         }
 
-        if (!is_string($content)) {
-            Debug::log('Content must be a string!');
-        } else {
+        if (is_string($content)) {
             $this->content = $content;
+        } else {
+            Debug::log(sprintf('Feed content must be a string but got %s', gettype($content)));
         }
 
         return $this;
@@ -361,11 +350,9 @@ class FeedItem
      */
     public function setEnclosures($enclosures)
     {
-        $this->enclosures = []; // Clear previous data
+        $this->enclosures = [];
 
-        if (!is_array($enclosures)) {
-            Debug::log('Enclosures must be an array!');
-        } else {
+        if (is_array($enclosures)) {
             foreach ($enclosures as $enclosure) {
                 if (
                     !filter_var(
@@ -379,6 +366,8 @@ class FeedItem
                     $this->enclosures[] = $enclosure;
                 }
             }
+        } else {
+            Debug::log('Enclosures must be an array!');
         }
 
         return $this;
@@ -407,11 +396,9 @@ class FeedItem
      */
     public function setCategories($categories)
     {
-        $this->categories = []; // Clear previous data
+        $this->categories = [];
 
-        if (!is_array($categories)) {
-            Debug::log('Categories must be an array!');
-        } else {
+        if (is_array($categories)) {
             foreach ($categories as $category) {
                 if (!is_string($category)) {
                     Debug::log('Category must be a string!');
@@ -419,6 +406,8 @@ class FeedItem
                     $this->categories[] = $category;
                 }
             }
+        } else {
+            Debug::log('Categories must be an array!');
         }
 
         return $this;

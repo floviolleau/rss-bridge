@@ -12,9 +12,15 @@
 ; timezone = "UTC" (default)
 timezone = "UTC"
 
+; Display a system message to users.
+message = ""
+
 [http]
 timeout = 60
-useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36"
+useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:102.0) Gecko/20100101 Firefox/102.0"
+
+; Max http response size in MB
+max_filesize = 20
 
 [cache]
 
@@ -32,6 +38,9 @@ custom_timeout = false
 ; This address is displayed on the main page, visible to everyone!
 ; ""    = Disabled (default)
 email = ""
+
+; Advertise a contact Telegram url e.g. "https://t.me/elegantobjects"
+telegram = ""
 
 ; Show Donation information for bridges if available.
 ; This will display a 'Donate' link on the bridge view
@@ -57,7 +66,7 @@ by_bridge = false
 
 [authentication]
 
-; Enables authentication for all requests to this RSS-Bridge instance.
+; Enables basic authentication for all requests to this RSS-Bridge instance.
 ;
 ; Warning: You'll have to upgrade existing feeds after enabling this option!
 ;
@@ -65,12 +74,13 @@ by_bridge = false
 ; false = disabled (default)
 enable = false
 
-; The username for authentication. Insert this name when prompted for login.
-username = ""
+username = "admin"
 
-; The password for authentication. Insert this password when prompted for login.
-; Use a strong password to prevent others from guessing your login!
-password = ""
+; This default password is public knowledge. Replace it.
+password = "7afbf648a369b261"
+
+; This will be used only for actions that require privileged access
+access_token = ""
 
 [error]
 
@@ -92,3 +102,13 @@ file = "cache.sqlite"
 [MemcachedCache]
 host = "localhost"
 port = 11211
+
+; --- Bridge specific configuration ------
+
+[DiscogsBridge]
+
+; Sets the personal access token for interactions with Discogs. When
+; provided, images can be included in generated feeds.
+;
+; "" = no token used (default)
+personal_access_token = ""

@@ -41,6 +41,12 @@ class RedditBridge extends BridgeAbstract
                 'required' => true,
                 'exampleValue' => 'selfhosted',
                 'title' => 'SubReddit name'
+            ],
+            'f' => [
+                'name' => 'Flair',
+                'required' => false,
+                'exampleValue' => 'Proxy',
+                'title' => 'Flair filter'
             ]
         ],
         'multi' => [
@@ -71,7 +77,9 @@ class RedditBridge extends BridgeAbstract
     {
         $parsed_url = parse_url($url);
 
-        if ($parsed_url['host'] != 'www.reddit.com' && $parsed_url['host'] != 'old.reddit.com') {
+        $host = $parsed_url['host'] ?? null;
+
+        if ($host != 'www.reddit.com' && $host != 'old.reddit.com') {
             return null;
         }
 
@@ -134,11 +142,20 @@ class RedditBridge extends BridgeAbstract
             $keywords = '';
         }
 
+        if (!empty($this->getInput('f')) && $this->queriedContext == 'single') {
+            $flair = $this->getInput('f');
+            $flair = str_replace(' ', '%20', $flair);
+            $flair = 'flair%3A%22' . $flair . '%22%20';
+        } else {
+            $flair = '';
+        }
+
         foreach ($subreddits as $subreddit) {
             $name = trim($subreddit);
             $values = getContents(self::URI
                     . '/search.json?q='
                     . $keywords
+                    . $flair
                     . ($user ? 'author%3A' : 'subreddit%3A')
                     . $name
                     . '&sort='
@@ -188,14 +205,17 @@ class RedditBridge extends BridgeAbstract
 
                     $item['content']
                         = htmlspecialchars_decode($data->selftext_html);
-                } elseif (isset($data->post_hint) ? $data->post_hint == 'link' : false) {
+                } elseif (isset($data->post_hint) && $data->post_hint == 'link') {
                     // Link with preview
 
                     if (isset($data->media)) {
-                        // Reddit embeds content for some sites (e.g. Twitter)
-                        $embed = htmlspecialchars_decode(
-                            $data->media->oembed->html
-                        );
+                        // todo: maybe switch on the type
+                        if (isset($data->media->oembed->html)) {
+                            // Reddit embeds content for some sites (e.g. Twitter)
+                            $embed = htmlspecialchars_decode($data->media->oembed->html);
+                        } else {
+                            $embed = '';
+                        }
                     } else {
                         $embed = '';
                     }

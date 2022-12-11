@@ -7,148 +7,56 @@ class HtmlFormat extends FormatAbstract
     public function stringify()
     {
         $extraInfos = $this->getExtraInfos();
-        $title = htmlspecialchars($extraInfos['name']);
-        $uri = htmlspecialchars($extraInfos['uri']);
-        $donationUri = htmlspecialchars($extraInfos['donationUri']);
-        $donationsAllowed = Configuration::getConfig('admin', 'donations');
-
-        // Dynamically build buttons for all formats (except HTML)
         $formatFactory = new FormatFactory();
-
-        $buttons = '';
-        $links = '';
-
+        $buttons = [];
+        $linkTags = [];
         foreach ($formatFactory->getFormatNames() as $format) {
-            if (strcasecmp($format, 'HTML') === 0) {
+            // Dynamically build buttons for all formats (except HTML)
+            if ($format === 'Html') {
                 continue;
             }
-
-            $query = str_ireplace('format=Html', 'format=' . $format, htmlentities($_SERVER['QUERY_STRING']));
-            $buttons .= $this->buildButton($format, $query) . PHP_EOL;
-
-            $mime = $formatFactory->create($format)->getMimeType();
-            $links .= $this->buildLink($format, $query, $mime) . PHP_EOL;
+            $formatUrl = '?' . str_ireplace('format=Html', 'format=' . $format, htmlentities($_SERVER['QUERY_STRING']));
+            $buttons[] = [
+                'href' => $formatUrl,
+                'value' => $format,
+            ];
+            $linkTags[] = [
+                'href' => $formatUrl,
+                'title' => $format,
+                'type' => $formatFactory->create($format)->getMimeType(),
+            ];
         }
 
-        if ($donationUri !== '' && $donationsAllowed) {
-            $buttons .= '<a href="'
-                        . $donationUri
-                        . '" target="_blank"><button class="highlight">Donate to maintainer</button></a>'
-                        . PHP_EOL;
-            $links .= '<link href="'
-                        . $donationUri
-                        . ' target="_blank"" title="Donate to Maintainer" rel="alternate">'
-                        . PHP_EOL;
+        if (Configuration::getConfig('admin', 'donations') && $extraInfos['donationUri'] !== '') {
+            $buttons[] = [
+                'href' => e($extraInfos['donationUri']),
+                'value' => 'Donate to maintainer',
+            ];
         }
 
-        $entries = '';
+        $items = [];
         foreach ($this->getItems() as $item) {
-            $entryAuthor = $item->getAuthor() ? '<br /><p class="author">by: ' . $item->getAuthor() . '</p>' : '';
-            $entryTitle = $this->sanitizeHtml(strip_tags($item->getTitle()));
-            $entryUri = $item->getURI() ?: $uri;
-
-            $entryDate = '';
-            if ($item->getTimestamp()) {
-                $entryDate = sprintf(
-                    '<time datetime="%s">%s</time>',
-                    date('Y-m-d H:i:s', $item->getTimestamp()),
-                    date('Y-m-d H:i:s', $item->getTimestamp())
-                );
-            }
-
-            $entryContent = '';
-            if ($item->getContent()) {
-                $entryContent = '<div class="content">'
-                . $this->sanitizeHtml($item->getContent())
-                . '</div>';
-            }
-
-            $entryEnclosures = '';
-            if (!empty($item->getEnclosures())) {
-                $entryEnclosures = '<div class="attachments"><p>Attachments:</p>';
-
-                foreach ($item->getEnclosures() as $enclosure) {
-                    $template = '<li class="enclosure"><a href="%s" rel="noopener noreferrer nofollow">%s</a></li>';
-                    $url = $this->sanitizeHtml($enclosure);
-                    $anchorText = substr($url, strrpos($url, '/') + 1);
-
-                    $entryEnclosures .= sprintf($template, $url, $anchorText);
-                }
-
-                $entryEnclosures .= '</div>';
-            }
-
-            $entryCategories = '';
-            if (!empty($item->getCategories())) {
-                $entryCategories = '<div class="categories"><p>Categories:</p>';
-
-                foreach ($item->getCategories() as $category) {
-                    $entryCategories .= '<li class="category">'
-                    . $this->sanitizeHtml($category)
-                    . '</li>';
-                }
-
-                $entryCategories .= '</div>';
-            }
-
-            $entries .= <<<EOD
-
-<section class="feeditem">
-	<h2><a class="itemtitle" href="{$entryUri}">{$entryTitle}</a></h2>
-	{$entryDate}
-	{$entryAuthor}
-	{$entryContent}
-	{$entryEnclosures}
-	{$entryCategories}
-</section>
-
-EOD;
+            $items[] = [
+                'url'           => $item->getURI() ?: $extraInfos['uri'],
+                'title'         => $item->getTitle() ?? '(no title)',
+                'timestamp'     => $item->getTimestamp(),
+                'author'        => $item->getAuthor(),
+                'content'       => $item->getContent() ?? '',
+                'enclosures'    => $item->getEnclosures(),
+                'categories'    => $item->getCategories(),
+            ];
         }
 
-        $charset = $this->getCharset();
-
-        /* Data are prepared, now let's begin the "MAGIE !!!" */
-        $toReturn = <<<EOD
-<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="{$charset}">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>{$title}</title>
-	<link href="static/HtmlFormat.css" rel="stylesheet">
-	<link rel="icon" type="image/png" href="static/favicon.png">
-	{$links}
-	<meta name="robots" content="noindex, follow">
-</head>
-<body>
-	<h1 class="pagetitle"><a href="{$uri}" target="_blank">{$title}</a></h1>
-	<div class="buttons">
-		<a href="./#bridge-{$_GET['bridge']}"><button class="backbutton">← back to rss-bridge</button></a>
-		{$buttons}
-	</div>
-{$entries}
-</body>
-</html>
-EOD;
-
+        $html = render_template(__DIR__ . '/../templates/html-format.html.php', [
+            'charset'   => $this->getCharset(),
+            'title'     => $extraInfos['name'],
+            'linkTags'  => $linkTags,
+            'uri'       => $extraInfos['uri'],
+            'buttons'   => $buttons,
+            'items'     => $items,
+        ]);
         // Remove invalid characters
         ini_set('mbstring.substitute_character', 'none');
-        $toReturn = mb_convert_encoding($toReturn, $this->getCharset(), 'UTF-8');
-        return $toReturn;
-    }
-
-    private function buildButton($format, $query)
-    {
-        return <<<EOD
-<a href="./?{$query}"><button class="rss-feed">{$format}</button></a>
-EOD;
-    }
-
-    private function buildLink($format, $query, $mime)
-    {
-        return <<<EOD
-<link href="./?{$query}" title="{$format}" rel="alternate" type="{$mime}">
-
-EOD;
+        return mb_convert_encoding($html, $this->getCharset(), 'UTF-8');
     }
 }

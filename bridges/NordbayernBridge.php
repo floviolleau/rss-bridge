@@ -14,28 +14,22 @@ class NordbayernBridge extends BridgeAbstract
             'exampleValue' => 'Nürnberg',
             'title' => 'Select a region',
             'values' => [
-                'Nürnberg' => 'nuernberg',
-                'Fürth' => 'fuerth',
-                'Erlangen' => 'erlangen',
-                'Altdorf' => 'altdorf',
                 'Ansbach' => 'ansbach',
-                'Bad Windsheim' => 'bad-windsheim',
                 'Bamberg' => 'bamberg',
-                'Dinkelsbühl/Feuchtwangen' => 'dinkelsbuehl-feuchtwangen',
-                'Feucht' => 'feucht',
+                'Bayreuth' => 'bayreuth',
+                'Erlangen' => 'erlangen',
                 'Forchheim' => 'forchheim',
+                'Fürth' => 'fuerth',
                 'Gunzenhausen' => 'gunzenhausen',
-                'Hersbruck' => 'hersbruck',
                 'Herzogenaurach' => 'herzogenaurach',
-                'Hilpoltstein' => 'hilpoltstein',
                 'Höchstadt' => 'hoechstadt',
-                'Lauf' => 'lauf',
                 'Neumarkt' => 'neumarkt',
-                'Neustadt/Aisch' => 'neustadt-aisch',
-                'Pegnitz' => 'pegnitz',
+                'Neustadt/Aisch-Bad Windsheim' => 'neustadt-aisch-bad-windsheim',
+                'Nürnberg' => 'nuernberg',
+                'Nürnberger Land' => 'nuernberger-land',
+                'Regensburg' => 'regensburg',
                 'Roth' => 'roth',
-                'Rothenburg o.d.T.' => 'rothenburg-o-d-t',
-                'Treuchtlingen' => 'treuchtlingen',
+                'Schwabach' => 'schwabach',
                 'Weißenburg' => 'weissenburg'
             ]
         ],
@@ -44,6 +38,12 @@ class NordbayernBridge extends BridgeAbstract
             'type' => 'checkbox',
             'exampleValue' => 'checked',
             'title' => 'Include Police Reports',
+        ],
+        'hideNNPlus' => [
+            'name' => 'Hide NN+ articles',
+            'type' => 'checkbox',
+            'exampleValue' => 'unchecked',
+            'title' => 'Hide all paywall articles on NN'
         ]
     ]];
 
@@ -159,7 +159,13 @@ class NordbayernBridge extends BridgeAbstract
         foreach ($main->find('article') as $article) {
             $url = $article->find('a', 0)->href;
             $url = urljoin(self::URI, $url);
-            self::handleArticle($url);
+            // exclude nn+ articles if desired
+            if (
+                !$this->getInput('hideNNPlus') ||
+                !str_contains($url, 'www.nn.de')
+            ) {
+                self::handleArticle($url);
+            }
         }
     }
 

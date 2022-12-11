@@ -420,7 +420,7 @@ class ReutersBridge extends BridgeAbstract
     {
         $description = '';
         foreach ($contents as $content) {
-            $data;
+            $data = '';
             if (isset($content['content'])) {
                 $data = $content['content'];
             }
@@ -498,13 +498,15 @@ EOD;
                     break;
                 case 'table':
                     $table = '<table>';
-                    $theaders = $content['header'];
-                    $tr = '<tr>';
-                    foreach ($theaders as $header) {
-                        $tr .= '<th>' . $header . '</th>';
+                    $theaders = $content['header'] ?? null;
+                    if ($theaders) {
+                        $tr = '<tr>';
+                        foreach ($theaders as $header) {
+                            $tr .= '<th>' . $header . '</th>';
+                        }
+                        $tr .= '</tr>';
+                        $table .= $tr;
                     }
-                    $tr .= '</tr>';
-                    $table .= $tr;
                     $rows = $content['rows'];
                     foreach ($rows as $row) {
                         $tr = '<tr>';
@@ -612,7 +614,7 @@ EOD;
             // Some article cause unexpected behaviour like redirect to another site not API.
             // Attempt to check article source type to avoid this.
             if (!$this->useWireAPI && $source_type != 'Package') { // Only Reuters PF api have this, Wire don't.
-                $author = $this->handleAuthorName($story['authors']);
+                $author = $this->handleAuthorName($story['authors'] ?? []);
                 $timestamp = $story['published_time'];
                 $image_placeholder = '';
                 if (isset($story['thumbnail'])) {

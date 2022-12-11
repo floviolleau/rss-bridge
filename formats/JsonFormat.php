@@ -25,18 +25,13 @@ class JsonFormat extends FormatAbstract
 
     public function stringify()
     {
-        $urlPrefix = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') ? 'https://' : 'http://';
-        $urlHost = (isset($_SERVER['HTTP_HOST'])) ? $_SERVER['HTTP_HOST'] : '';
-        $urlPath = (isset($_SERVER['PATH_INFO'])) ? $_SERVER['PATH_INFO'] : '';
-        $urlRequest = (isset($_SERVER['REQUEST_URI'])) ? $_SERVER['REQUEST_URI'] : '';
-
+        $host = $_SERVER['HTTP_HOST'] ?? '';
         $extraInfos = $this->getExtraInfos();
-
         $data = [
             'version' => 'https://jsonfeed.org/version/1',
-            'title' => (!empty($extraInfos['name'])) ? $extraInfos['name'] : $urlHost,
-            'home_page_url' => (!empty($extraInfos['uri'])) ? $extraInfos['uri'] : REPOSITORY,
-            'feed_url' => $urlPrefix . $urlHost . $urlRequest
+            'title' => empty($extraInfos['name']) ? $host : $extraInfos['name'],
+            'home_page_url' => empty($extraInfos['uri']) ? REPOSITORY : $extraInfos['uri'],
+            'feed_url' => get_current_url(),
         ];
 
         if (!empty($extraInfos['icon'])) {
@@ -52,7 +47,7 @@ class JsonFormat extends FormatAbstract
             $entryTitle = $item->getTitle();
             $entryUri = $item->getURI();
             $entryTimestamp = $item->getTimestamp();
-            $entryContent = $item->getContent() ? $this->sanitizeHtml($item->getContent()) : '';
+            $entryContent = $item->getContent() ? sanitize_html($item->getContent()) : '';
             $entryEnclosures = $item->getEnclosures();
             $entryCategories = $item->getCategories();
 
@@ -76,13 +71,13 @@ class JsonFormat extends FormatAbstract
                 ];
             }
             if (!empty($entryTimestamp)) {
-                $entry['date_modified'] = gmdate(DATE_ATOM, $entryTimestamp);
+                $entry['date_modified'] = gmdate(\DATE_ATOM, $entryTimestamp);
             }
             if (!empty($entryUri)) {
                 $entry['url'] = $entryUri;
             }
             if (!empty($entryContent)) {
-                if ($this->isHTML($entryContent)) {
+                if (is_html($entryContent)) {
                     $entry['content_html'] = $entryContent;
                 } else {
                     $entry['content_text'] = $entryContent;
@@ -93,7 +88,7 @@ class JsonFormat extends FormatAbstract
                 foreach ($entryEnclosures as $enclosure) {
                     $entry['attachments'][] = [
                         'url' => $enclosure,
-                        'mime_type' => getMimeType($enclosure)
+                        'mime_type' => parse_mime_type($enclosure)
                     ];
                 }
             }
@@ -121,13 +116,8 @@ class JsonFormat extends FormatAbstract
          * So consider this a hack.
          * Switch to JSON_INVALID_UTF8_IGNORE when PHP 7.2 is the latest platform requirement.
          */
-        $json = json_encode($data, JSON_PRETTY_PRINT | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $json = json_encode($data, \JSON_PRETTY_PRINT | \JSON_PARTIAL_OUTPUT_ON_ERROR);
 
         return $json;
-    }
-
-    private function isHTML($text)
-    {
-        return (strlen(strip_tags($text)) != strlen($text));
     }
 }

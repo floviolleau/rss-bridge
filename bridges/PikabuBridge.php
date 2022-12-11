@@ -14,7 +14,7 @@ class PikabuBridge extends BridgeAbstract
             'Горячее' => 'hot',
             'Свежее' => 'new',
         ],
-        'defaultValue' => 'hot'
+        'defaultValue' => 'hot',
     ];
 
     const PARAMETERS = [
@@ -132,6 +132,10 @@ class PikabuBridge extends BridgeAbstract
             }
 
             $title_element = $post->find('.story__title-link', 0);
+            if (str_contains($title_element->href, 'from=cpm')) {
+                // skip sponsored posts
+                continue;
+            }
 
             $title = $title_element->plaintext;
             $community_link = $post->find('.story__community-link', 0);
@@ -143,7 +147,7 @@ class PikabuBridge extends BridgeAbstract
 
             $item = [];
             $item['categories'] = $categories;
-            $item['author'] = $post->find('.user__nick', 0)->innertext;
+            $item['author'] = trim($post->find('.user__nick', 0)->plaintext);
             $item['title'] = $title;
             $item['content'] = strip_tags(
                 backgroundToImg($post->find('.story__content-inner', 0)->innertext),

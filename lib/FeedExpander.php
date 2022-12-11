@@ -85,10 +85,10 @@ abstract class FeedExpander extends BridgeAbstract
     public function collectExpandableDatas($url, $maxItems = -1)
     {
         if (empty($url)) {
-            returnServerError('There is no $url for this RSS expander');
+            throw new \Exception('There is no $url for this RSS expander');
         }
 
-        Debug::log('Loading from ' . $url);
+        Debug::log(sprintf('Loading from %s', $url));
 
         /* Notice we do not use cache here on purpose:
          * we want a fresh view of the RSS stream each time
@@ -100,15 +100,35 @@ abstract class FeedExpander extends BridgeAbstract
             '*/*',
         ];
         $httpHeaders = ['Accept: ' . implode(', ', $mimeTypes)];
-        $content = getContents($url, $httpHeaders)
-            or returnServerError('Could not request ' . $url);
-        $rssContent = simplexml_load_string(trim($content));
-
-        if ($rssContent === false) {
-            throw new \Exception('Unable to parse string as xml');
+        $content = getContents($url, $httpHeaders);
+        if ($content === '') {
+            throw new \Exception(sprintf('Unable to parse xml from `%s` because we got the empty string', $url));
         }
+        // Maybe move this call earlier up the stack frames
+        // Disable triggering of the php error-handler and handle errors manually instead
+        libxml_use_internal_errors(true);
+        // Consider replacing libxml with https://www.php.net/domdocument
+        // Intentionally not using the silencing operator (@) because it has no effect here
+        $rssContent = simplexml_load_string(trim($content));
+        if ($rssContent === false) {
+            $xmlErrors = libxml_get_errors();
+            foreach ($xmlErrors as $xmlError) {
+                if (Debug::isEnabled()) {
+                    Debug::log(trim($xmlError->message));
+                }
+            }
+            if ($xmlErrors) {
+                // Render only the first error into exception message
+                $firstXmlErrorMessage = $xmlErrors[0]->message;
+            }
+            throw new \Exception(sprintf('Unable to parse xml from `%s` %s', $url, $firstXmlErrorMessage ?? ''));
+        }
+        // Restore previous behaviour in case other code relies on it being off
+        libxml_use_internal_errors(false);
 
-        Debug::log('Detecting feed format/version');
+        // Commented out because it's spammy
+        // Debug::log(sprintf("RSS content is ===========\n%s===========", var_export($rssContent, true)));
+
         switch (true) {
             case isset($rssContent->item[0]):
                 Debug::log('Detected RSS 1.0 format');
@@ -126,16 +146,15 @@ abstract class FeedExpander extends BridgeAbstract
                 $this->collectAtom1($rssContent, $maxItems);
                 break;
             default:
-                Debug::log('Unknown feed format/version');
-                returnServerError('The feed format is unknown!');
-                break;
+                Debug::log(sprintf('Unable to detect feed format from `%s`', $url));
+                throw new \Exception(sprintf('Unable to detect feed format from `%s`', $url));
         }
 
         return $this;
     }
 
     /**
-     * Collect data from a RSS 1.0 compatible feed
+     * Collect data from an RSS 1.0 compatible feed
      *
      * @link http://web.resource.org/rss/1.0/spec RDF Site Summary (RSS) 1.0
      *
@@ -151,7 +170,6 @@ abstract class FeedExpander extends BridgeAbstract
     {
         $this->loadRss2Data($rssContent->channel[0]);
         foreach ($rssContent->item as $item) {
-            Debug::log('parsing item ' . var_export($item, true));
             $tmp_item = $this->parseItem($item);
             if (!empty($tmp_item)) {
                 $this->items[] = $tmp_item;
@@ -167,24 +185,16 @@ abstract class FeedExpander extends BridgeAbstract
      *
      * @link http://www.rssboard.org/rss-specification RSS 2.0 Specification
      *
-     * @param object $rssContent The RSS content
-     * @param int $maxItems Maximum number of items to collect from the feed
-     * (`-1`: no limit).
+     * @param int $maxItems Maximum number of items to collect from the feed (`-1`: no limit).
      * @return void
      *
-     * @todo Instead of passing $maxItems to all functions, just add all items
-     * and remove excessive items later.
+     * @todo Instead of passing $maxItems to all functions, just add all items and remove excessive items later.
      */
-    protected function collectRss2($rssContent, $maxItems)
+    protected function collectRss2(\SimpleXMLElement $rssContent, $maxItems)
     {
         $rssContent = $rssContent->channel[0];
-        Debug::log('RSS content is ===========\n'
-        . var_export($rssContent, true)
-        . '===========');
-
         $this->loadRss2Data($rssContent);
         foreach ($rssContent->item as $item) {
-            Debug::log('parsing item ' . var_export($item, true));
             $tmp_item = $this->parseItem($item);
             if (!empty($tmp_item)) {
                 $this->items[] = $tmp_item;
@@ -212,7 +222,6 @@ abstract class FeedExpander extends BridgeAbstract
     {
         $this->loadAtomData($content);
         foreach ($content->entry as $item) {
-            Debug::log('parsing item ' . var_export($item, true));
             $tmp_item = $this->parseItem($item);
             if (!empty($tmp_item)) {
                 $this->items[] = $tmp_item;
@@ -292,7 +301,7 @@ abstract class FeedExpander extends BridgeAbstract
             $item['uri'] = (string)$feedItem->id;
         }
         if (isset($feedItem->title)) {
-            $item['title'] = (string)$feedItem->title;
+            $item['title'] = html_entity_decode((string)$feedItem->title);
         }
         if (isset($feedItem->updated)) {
             $item['timestamp'] = strtotime((string)$feedItem->updated);
@@ -338,7 +347,7 @@ abstract class FeedExpander extends BridgeAbstract
             $item['uri'] = (string)$feedItem->link;
         }
         if (isset($feedItem->title)) {
-            $item['title'] = (string)$feedItem->title;
+            $item['title'] = html_entity_decode((string)$feedItem->title);
         }
         // rss 0.91 doesn't support timestamps
         // rss 0.91 doesn't support authors
@@ -453,33 +462,39 @@ abstract class FeedExpander extends BridgeAbstract
         switch ($this->feedType) {
             case self::FEED_TYPE_RSS_1_0:
                 return $this->parseRss1Item($item);
-            break;
             case self::FEED_TYPE_RSS_2_0:
                 return $this->parseRss2Item($item);
-            break;
             case self::FEED_TYPE_ATOM_1_0:
                 return $this->parseATOMItem($item);
-            break;
             default:
-                returnClientError('Unknown version ' . $this->getInput('version') . '!');
+                throw new \Exception(sprintf('Unknown version %s!', $this->getInput('version')));
         }
     }
 
     /** {@inheritdoc} */
     public function getURI()
     {
-        return !empty($this->uri) ? $this->uri : parent::getURI();
+        if (!empty($this->uri)) {
+            return $this->uri;
+        }
+        return parent::getURI();
     }
 
     /** {@inheritdoc} */
     public function getName()
     {
-        return !empty($this->title) ? $this->title : parent::getName();
+        if (!empty($this->title)) {
+            return $this->title;
+        }
+        return parent::getName();
     }
 
     /** {@inheritdoc} */
     public function getIcon()
     {
-        return !empty($this->icon) ? $this->icon : parent::getIcon();
+        if (!empty($this->icon)) {
+            return $this->icon;
+        }
+        return parent::getIcon();
     }
 }
