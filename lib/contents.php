@@ -125,6 +125,8 @@ function getContents(
         $httpHeadersNormalized[$headerName] = $headerValue;
     }
     $config = [
+        'useragent' => Configuration::getConfig('http', 'useragent'),
+        'timeout' => Configuration::getConfig('http', 'timeout'),
         'headers' => array_merge($defaultHttpHeaders, $httpHeadersNormalized),
         'curl_options' => $curlOptions,
     ];
@@ -176,29 +178,28 @@ function getContents(
             $response['content'] = $cache->loadData();
             break;
         default:
-            if (Debug::isEnabled()) {
-                // Include a part of the response body in the exception message
-                throw new HttpException(
-                    sprintf(
-                        '%s resulted in `%s %s: %s`',
-                        $url,
-                        $result['code'],
-                        Response::STATUS_CODES[$result['code']] ?? '',
-                        mb_substr($result['body'], 0, 500),
-                    ),
-                    $result['code']
-                );
-            } else {
-                throw new HttpException(
-                    sprintf(
-                        '%s resulted in `%s %s`',
-                        $url,
-                        $result['code'],
-                        Response::STATUS_CODES[$result['code']] ?? '',
-                    ),
-                    $result['code']
-                );
+            $exceptionMessage = sprintf(
+                '%s resulted in %s %s %s',
+                $url,
+                $result['code'],
+                Response::STATUS_CODES[$result['code']] ?? '',
+                // If debug, include a part of the response body in the exception message
+                Debug::isEnabled() ? mb_substr($result['body'], 0, 500) : '',
+            );
+
+            // The following code must be extracted if it grows too much
+            $cloudflareTitles = [
+                '<title>Just a moment...',
+                '<title>Please Wait...',
+                '<title>Attention Required!'
+            ];
+            foreach ($cloudflareTitles as $cloudflareTitle) {
+                if (str_contains($result['body'], $cloudflareTitle)) {
+                    throw new CloudFlareException($exceptionMessage, $result['code']);
+                }
             }
+
+            throw new HttpException($exceptionMessage, $result['code']);
     }
     if ($returnFull === true) {
         return $response;
@@ -215,8 +216,8 @@ function getContents(
 function _http_request(string $url, array $config = []): array
 {
     $defaults = [
-        'useragent' => Configuration::getConfig('http', 'useragent'),
-        'timeout' => Configuration::getConfig('http', 'timeout'),
+        'useragent' => null,
+        'timeout' => 5,
         'headers' => [],
         'proxy' => null,
         'curl_options' => [],
@@ -236,12 +237,12 @@ function _http_request(string $url, array $config = []): array
         $httpHeaders[] = sprintf('%s: %s', $name, $value);
     }
     curl_setopt($ch, CURLOPT_HTTPHEADER, $httpHeaders);
-    curl_setopt($ch, CURLOPT_USERAGENT, $config['useragent']);
+    if ($config['useragent']) {
+        curl_setopt($ch, CURLOPT_USERAGENT, $config['useragent']);
+    }
     curl_setopt($ch, CURLOPT_TIMEOUT, $config['timeout']);
     curl_setopt($ch, CURLOPT_ENCODING, '');
     curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-    // Force HTTP 1.1 because newer versions of libcurl defaults to HTTP/2
-    curl_setopt($ch, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 
     if ($config['max_filesize']) {
         // This option inspects the Content-Length header
