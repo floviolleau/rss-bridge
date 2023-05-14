@@ -53,7 +53,7 @@ $html = getContents($url, $header, $opts);
 ```
 
 # getSimpleHTMLDOM
-The `getSimpleHTMLDOM` function is a wrapper for the [simple_html_dom](http://simplehtmldom.sourceforge.net/) [file_get_html](http://simplehtmldom.sourceforge.net/manual_api.htm#api) function in order to provide context by design.
+The `getSimpleHTMLDOM` function is a wrapper for the [simple_html_dom](https://simplehtmldom.sourceforge.io/) [file_get_html](https://simplehtmldom.sourceforge.io/docs/1.9/api/file_get_html/) function in order to provide context by design.
 
 ```PHP
 $html = getSimpleHTMLDOM('your URI');
@@ -194,8 +194,20 @@ $cleaned = stripRecursiveHTMLSection($string, $tag_name, $tag_start);
 # markdownToHtml
 Converts markdown input to HTML using [Parsedown](https://parsedown.org/).
 
+| Parameter | Type   | Optional   | Description
+| --------- | ------ | ---------- | ----------
+| `string`  | string | *required* | The URL of the contents to acquire
+| `config`  | array  | *optional* | An array of Parsedown options in the format `['breaksEnabled' => true]`
+
+Valid options:
+| Option          | Default | Description
+| --------------- | ------- | -----------
+| `breaksEnabled` | `false` | Enable automatic line breaks
+| `markupEscaped` | `false` | Escape inline markup (HTML)
+| `urlsLinked`    | `true`  | Automatically convert URLs to links
+
 ```php
-function markdownToHtml(string $string) : string
+function markdownToHtml(string $string, array $config = []) : string
 ```
 
 **Example**
