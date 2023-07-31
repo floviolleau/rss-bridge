@@ -39,8 +39,13 @@ class YandexZenBridge extends BridgeAbstract
 
             $item['uri'] = $post->share_link;
             $item['title'] = $post->title;
-            $item['timestamp'] = date(DateTimeInterface::ATOM, $post->publication_date);
-            $item['content'] = $post->text;
+
+            $publicationDateUnixTimestamp = $post->publication_date ?? null;
+            if ($publicationDateUnixTimestamp) {
+                $item['timestamp'] = date(DateTimeInterface::ATOM, $publicationDateUnixTimestamp);
+            }
+
+            $item['content'] = $post->text . "<br /><img src='$post->image' />";
             $item['enclosures'] = [
                 $post->image,
             ];

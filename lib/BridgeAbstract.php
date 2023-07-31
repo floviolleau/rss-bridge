@@ -314,9 +314,10 @@ abstract class BridgeAbstract implements BridgeInterface
         if (!isset($context)) {
             $context = $this->queriedContext;
         }
+
         $needle = $this->inputs[$this->queriedContext][$input]['value'];
         foreach (static::PARAMETERS[$context][$input]['values'] as $first_level_key => $first_level_value) {
-            if ($needle === (string)$first_level_value) {
+            if (!is_array($first_level_value) && $needle === (string)$first_level_value) {
                 return $first_level_key;
             } elseif (is_array($first_level_value)) {
                 foreach ($first_level_value as $second_level_key => $second_level_value) {
@@ -408,39 +409,27 @@ abstract class BridgeAbstract implements BridgeInterface
     /**
      * Loads a cached value for the specified key
      *
-     * @param string $key Key name
-     * @param int $duration Cache duration (optional)
+     * @param int $timeout Cache duration (optional)
      * @return mixed Cached value or null if the key doesn't exist or has expired
      */
-    protected function loadCacheValue($key, $duration = null)
+    protected function loadCacheValue(string $key, int $timeout = 86400)
     {
-        $cacheFactory = new CacheFactory();
-
-        $cache = $cacheFactory->create();
-        // Create class name without the namespace part
-        $scope = $this->getShortName();
-        $cache->setScope($scope);
-        $cache->setKey($key);
-        if ($duration && $cache->getTime() < time() - $duration) {
-            return null;
-        }
-        return $cache->loadData();
+        $cache = RssBridge::getCache();
+        $cache->setScope($this->getShortName());
+        $cache->setKey([$key]);
+        return $cache->loadData($timeout);
     }
 
     /**
      * Stores a value to cache with the specified key
      *
-     * @param string $key Key name
      * @param mixed $value Value to cache
      */
-    protected function saveCacheValue($key, $value)
+    protected function saveCacheValue(string $key, $value)
     {
-        $cacheFactory = new CacheFactory();
-
-        $cache = $cacheFactory->create();
-        $scope = $this->getShortName();
-        $cache->setScope($scope);
-        $cache->setKey($key);
+        $cache = RssBridge::getCache();
+        $cache->setScope($this->getShortName());
+        $cache->setKey([$key]);
         $cache->saveData($value);
     }
 

@@ -19,7 +19,7 @@
  */
 final class Configuration
 {
-    private const VERSION = 'dev.2023-03-22';
+    private const VERSION = 'dev.2023-07-11';
 
     private static $config = [];
 
@@ -98,21 +98,6 @@ final class Configuration
                 self::setConfig($header, $key, $value);
             }
         }
-        foreach ($env as $envName => $envValue) {
-            $nameParts = explode('_', $envName);
-            if ($nameParts[0] === 'RSSBRIDGE') {
-                if (count($nameParts) < 3) {
-                    // Invalid env name
-                    continue;
-                }
-                $header = $nameParts[1];
-                $key = $nameParts[2];
-                if ($envValue === 'true' || $envValue === 'false') {
-                    $envValue = filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
-                }
-                self::setConfig($header, $key, $envValue);
-            }
-        }
 
         if (file_exists(__DIR__ . '/../DEBUG')) {
             // The debug mode has been moved to config. Preserve existing installs which has this DEBUG file.
@@ -121,6 +106,48 @@ final class Configuration
             if ($debug) {
                 self::setConfig('system', 'debug_mode_whitelist', explode("\n", str_replace("\r", '', $debug)));
             }
+        }
+
+        if (file_exists(__DIR__ . '/../whitelist.txt')) {
+            $enabledBridges = trim(file_get_contents(__DIR__ . '/../whitelist.txt'));
+            if ($enabledBridges === '*') {
+                self::setConfig('system', 'enabled_bridges', ['*']);
+            } else {
+                self::setConfig('system', 'enabled_bridges', array_filter(array_map('trim', explode("\n", $enabledBridges))));
+            }
+        }
+
+        foreach ($env as $envName => $envValue) {
+            $nameParts = explode('_', $envName);
+            if ($nameParts[0] === 'RSSBRIDGE') {
+                if (count($nameParts) < 3) {
+                    // Invalid env name
+                    continue;
+                }
+
+                // The variable is named $header but it's actually the section in config.ini.php
+                $header = $nameParts[1];
+
+                // Recombine the key if it had multiple underscores
+                $key = implode('_', array_slice($nameParts, 2));
+                $key = strtolower($key);
+
+                // Handle this specifically because it's an array
+                if ($key === 'enabled_bridges') {
+                    $envValue = explode(',', $envValue);
+                    $envValue = array_map('trim', $envValue);
+                }
+
+                if ($envValue === 'true' || $envValue === 'false') {
+                    $envValue = filter_var($envValue, FILTER_VALIDATE_BOOLEAN);
+                }
+
+                self::setConfig($header, $key, $envValue);
+            }
+        }
+
+        if (!is_array(self::getConfig('system', 'enabled_bridges'))) {
+            self::throwConfigError('system', 'enabled_bridges', 'Is not an array');
         }
 
         if (
@@ -193,9 +220,9 @@ final class Configuration
         }
     }
 
-    public static function getConfig(string $section, string $key)
+    public static function getConfig(string $section, string $key, $default = null)
     {
-        return self::$config[strtolower($section)][strtolower($key)] ?? null;
+        return self::$config[strtolower($section)][strtolower($key)] ?? $default;
     }
 
     private static function setConfig(string $section, string $key, $value): void

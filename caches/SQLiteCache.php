@@ -1,128 +1,115 @@
 <?php
 
-/**
- * Cache based on SQLite 3 <https://www.sqlite.org>
- */
 class SQLiteCache implements CacheInterface
 {
-    protected $scope;
-    protected $key;
+    private \SQLite3 $db;
+    private string $scope;
+    private string $key;
+    private array $config;
 
-    private $db = null;
-
-    public function __construct()
+    public function __construct(array $config)
     {
-        if (!extension_loaded('sqlite3')) {
-            throw new \Exception('"sqlite3" extension not loaded. Please check "php.ini"');
+        $default = [
+            'file'          => null,
+            'timeout'       => 5000,
+            'enable_purge'  => true,
+        ];
+        $config = array_merge($default, $config);
+        $this->config = $config;
+
+        if (!$config['file']) {
+            throw new \Exception('sqlite cache needs a file');
         }
 
-        if (!is_writable(PATH_CACHE)) {
-            throw new \Exception('The cache folder is not writable');
-        }
-
-        $section = 'SQLiteCache';
-        $file = Configuration::getConfig($section, 'file');
-        if (!$file) {
-            throw new \Exception(sprintf('Configuration for %s missing.', $section));
-        }
-
-        if (dirname($file) == '.') {
-            $file = PATH_CACHE . $file;
-        } elseif (!is_dir(dirname($file))) {
-            throw new \Exception(sprintf('Invalid configuration for %s', $section));
-        }
-
-        if (!is_file($file)) {
-            // The instantiation creates the file
-            $this->db = new \SQLite3($file);
+        if (is_file($config['file'])) {
+            $this->db = new \SQLite3($config['file']);
+            $this->db->enableExceptions(true);
+        } else {
+            // Create the file and create sql schema
+            $this->db = new \SQLite3($config['file']);
             $this->db->enableExceptions(true);
             $this->db->exec("CREATE TABLE storage ('key' BLOB PRIMARY KEY, 'value' BLOB, 'updated' INTEGER)");
-        } else {
-            $this->db = new \SQLite3($file);
-            $this->db->enableExceptions(true);
         }
-        $this->db->busyTimeout(5000);
+        $this->db->busyTimeout($config['timeout']);
     }
 
-    public function loadData()
+    public function loadData(int $timeout = 86400)
     {
-        $Qselect = $this->db->prepare('SELECT value FROM storage WHERE key = :key');
-        $Qselect->bindValue(':key', $this->getCacheKey());
-        $result = $Qselect->execute();
-        if ($result instanceof \SQLite3Result) {
-            $data = $result->fetchArray(\SQLITE3_ASSOC);
-            if (isset($data['value'])) {
-                return unserialize($data['value']);
-            }
+        $stmt = $this->db->prepare('SELECT value, updated FROM storage WHERE key = :key');
+        $stmt->bindValue(':key', $this->getCacheKey());
+        $result = $stmt->execute();
+        if (!$result) {
+            return null;
         }
-
+        $row = $result->fetchArray(\SQLITE3_ASSOC);
+        if ($row === false) {
+            return null;
+        }
+        $value = $row['value'];
+        $modificationTime = $row['updated'];
+        if (time() - $timeout < $modificationTime) {
+            $data = unserialize($value);
+            if ($data === false) {
+                Logger::error(sprintf("Failed to unserialize: '%s'", mb_substr($value, 0, 100)));
+                return null;
+            }
+            return $data;
+        }
+        // It's a good idea to delete expired cache items.
+        // However I'm seeing lots of  SQLITE_BUSY errors so commented out for now
+        // $stmt = $this->db->prepare('DELETE FROM storage WHERE key = :key');
+        // $stmt->bindValue(':key', $this->getCacheKey());
+        // $stmt->execute();
         return null;
     }
 
-    public function saveData($data)
+    public function saveData($data): void
     {
-        $Qupdate = $this->db->prepare('INSERT OR REPLACE INTO storage (key, value, updated) VALUES (:key, :value, :updated)');
-        $Qupdate->bindValue(':key', $this->getCacheKey());
-        $Qupdate->bindValue(':value', serialize($data));
-        $Qupdate->bindValue(':updated', time());
-        $Qupdate->execute();
+        $blob = serialize($data);
 
-        return $this;
+        $stmt = $this->db->prepare('INSERT OR REPLACE INTO storage (key, value, updated) VALUES (:key, :value, :updated)');
+        $stmt->bindValue(':key', $this->getCacheKey());
+        $stmt->bindValue(':value', $blob, \SQLITE3_BLOB);
+        $stmt->bindValue(':updated', time());
+        $stmt->execute();
     }
 
-    public function getTime()
+    public function getTime(): ?int
     {
-        $Qselect = $this->db->prepare('SELECT updated FROM storage WHERE key = :key');
-        $Qselect->bindValue(':key', $this->getCacheKey());
-        $result = $Qselect->execute();
-        if ($result instanceof \SQLite3Result) {
-            $data = $result->fetchArray(SQLITE3_ASSOC);
-            if (isset($data['updated'])) {
-                return $data['updated'];
+        $stmt = $this->db->prepare('SELECT updated FROM storage WHERE key = :key');
+        $stmt->bindValue(':key', $this->getCacheKey());
+        $result = $stmt->execute();
+        if ($result) {
+            $row = $result->fetchArray(\SQLITE3_ASSOC);
+            if ($row !== false) {
+                return $row['updated'];
             }
         }
-
         return null;
     }
 
-    public function purgeCache($seconds)
+    public function purgeCache(int $timeout = 86400): void
     {
-        $Qdelete = $this->db->prepare('DELETE FROM storage WHERE updated < :expired');
-        $Qdelete->bindValue(':expired', time() - $seconds);
-        $Qdelete->execute();
+        if (!$this->config['enable_purge']) {
+            return;
+        }
+        $stmt = $this->db->prepare('DELETE FROM storage WHERE updated < :expired');
+        $stmt->bindValue(':expired', time() - $timeout);
+        $stmt->execute();
     }
 
-    public function setScope($scope)
+    public function setScope(string $scope): void
     {
-        if (is_null($scope) || !is_string($scope)) {
-            throw new \Exception('The given scope is invalid!');
-        }
-
         $this->scope = $scope;
-        return $this;
     }
 
-    public function setKey($key)
+    public function setKey(array $key): void
     {
-        if (!empty($key) && is_array($key)) {
-            $key = array_map('strtolower', $key);
-        }
-        $key = json_encode($key);
-
-        if (!is_string($key)) {
-            throw new \Exception('The given key is invalid!');
-        }
-
-        $this->key = $key;
-        return $this;
+        $this->key = json_encode($key);
     }
 
     private function getCacheKey()
     {
-        if (is_null($this->key)) {
-            throw new \Exception('Call "setKey" first!');
-        }
-
         return hash('sha1', $this->scope . $this->key, true);
     }
 }
