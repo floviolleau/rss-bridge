@@ -98,24 +98,22 @@ class InstagramBridge extends BridgeAbstract
             return $username;
         }
 
-        $cache = RssBridge::getCache();
-        $cache->setScope('InstagramBridge');
-        $cache->setKey([$username]);
-        $key = $cache->loadData();
+        $cacheKey = 'InstagramBridge_' . $username;
+        $pk = $this->cache->get($cacheKey);
 
-        if ($key == null) {
+        if (!$pk) {
             $data = $this->getContents(self::URI . 'web/search/topsearch/?query=' . $username);
             foreach (json_decode($data)->users as $user) {
                 if (strtolower($user->user->username) === strtolower($username)) {
-                    $key = $user->user->pk;
+                    $pk = $user->user->pk;
                 }
             }
-            if ($key == null) {
+            if (!$pk) {
                 returnServerError('Unable to find username in search result.');
             }
-            $cache->saveData($key);
+            $this->cache->set($cacheKey, $pk);
         }
-        return $key;
+        return $pk;
     }
 
     public function collectData()
@@ -123,6 +121,9 @@ class InstagramBridge extends BridgeAbstract
         $directLink = !is_null($this->getInput('direct_links')) && $this->getInput('direct_links');
 
         $data = $this->getInstagramJSON($this->getURI());
+        if (!$data) {
+            return;
+        }
 
         if (!is_null($this->getInput('u'))) {
             $userMedia = $data->data->user->edge_owner_to_timeline_media->edges;
@@ -288,9 +289,11 @@ class InstagramBridge extends BridgeAbstract
             $html = getContents($uri);
             $scriptRegex = '/window\._sharedData = (.*);<\/script>/';
 
-            preg_match($scriptRegex, $html, $matches, PREG_OFFSET_CAPTURE, 0);
-
-            return json_decode($matches[1][0]);
+            $ret = preg_match($scriptRegex, $html, $matches, PREG_OFFSET_CAPTURE);
+            if ($ret) {
+                return json_decode($matches[1][0]);
+            }
+            return null;
         }
     }
 

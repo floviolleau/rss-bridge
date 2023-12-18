@@ -201,7 +201,7 @@ class ItakuBridge extends BridgeAbstract
                 'rating_e' => $this->getInput('rating_e')
             ];
 
-            $tag_arr = explode(' ', $this->getInput('tags'));
+            $tag_arr = explode(' ', $this->getInput('tags') ?? '');
             foreach ($tag_arr as $str) {
                 switch ($str[0]) {
                     case '-':
@@ -446,6 +446,9 @@ class ItakuBridge extends BridgeAbstract
 
     private function getPost($id, array $metadata = null)
     {
+        if (isset($metadata) && sizeof($metadata['gallery_images']) < $metadata['num_images']) {
+            $metadata = null; //force re-fetch of metadata
+        }
         $uri = self::URI . '/posts/' . $id;
         $url = self::URI . '/api/posts/' . $id . '/?format=json';
         $data = $metadata ?? $this->getData($url, true, true)
@@ -664,7 +667,7 @@ class ItakuBridge extends BridgeAbstract
         // Debug::log($url);
         if ($getJSON) { //get JSON object
             if ($cache) {
-                $data = $this->loadCacheValue($url, 86400); // 24 hours
+                $data = $this->loadCacheValue($url);
                 if (is_null($data)) {
                     $data = getContents($url, $httpHeaders, $curlOptions) or returnServerError("Could not load $url");
                     $this->saveCacheValue($url, $data);

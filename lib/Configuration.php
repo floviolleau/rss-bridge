@@ -1,25 +1,13 @@
 <?php
 
 /**
- * This file is part of RSS-Bridge, a PHP project capable of generating RSS and
- * Atom feeds for websites that don't have one.
- *
- * For the full license information, please view the UNLICENSE file distributed
- * with this source code.
- *
- * @package Core
- * @license http://unlicense.org/ UNLICENSE
- * @link    https://github.com/rss-bridge/rss-bridge
- */
-
-/**
  * Configuration module for RSS-Bridge.
  *
  * This class implements a configuration module for RSS-Bridge.
  */
 final class Configuration
 {
-    private const VERSION = 'dev.2023-07-11';
+    private const VERSION = '2023-09-24';
 
     private static $config = [];
 
@@ -27,20 +15,8 @@ final class Configuration
     {
     }
 
-    /**
-     * Verifies the current installation of RSS-Bridge and PHP.
-     *
-     * Returns an error message and aborts execution if the installation does
-     * not satisfy the requirements of RSS-Bridge.
-     *
-     * @return void
-     */
-    public static function verifyInstallation()
+    public static function checkInstallation(): array
     {
-        if (version_compare(\PHP_VERSION, '7.4.0') === -1) {
-            throw new \Exception('RSS-Bridge requires at least PHP version 7.4.0!');
-        }
-
         $errors = [];
 
         // OpenSSL: https://www.php.net/manual/en/book.openssl.php
@@ -73,10 +49,7 @@ final class Configuration
         if (!extension_loaded('json')) {
             $errors[] = 'json extension not loaded';
         }
-
-        if ($errors) {
-            throw new \Exception(sprintf('Configuration error: %s', implode(', ', $errors)));
-        }
+        return $errors;
     }
 
     public static function loadConfiguration(array $customConfig = [], array $env = [])
@@ -210,6 +183,9 @@ final class Configuration
 
         if (!is_string(self::getConfig('error', 'output'))) {
             self::throwConfigError('error', 'output', 'Is not a valid String');
+        }
+        if (!in_array(self::getConfig('error', 'output'), ['feed', 'http', 'none'])) {
+            self::throwConfigError('error', 'output', 'Invalid output');
         }
 
         if (

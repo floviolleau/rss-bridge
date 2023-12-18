@@ -29,11 +29,12 @@ class VkBridge extends BridgeAbstract
         'https://vk.com/groupname/anythingelse' => ['u' => 'groupname'],
         'https://vk.com/groupname?w=somethingelse' => ['u' => 'groupname'],
         'https://vk.com/with_underscore' => ['u' => 'with_underscore'],
+        'https://vk.com/vk.cats' => ['u' => 'vk.cats'],
     ];
 
     protected $pageName;
     protected $tz = 0;
-    private $urlRegex = '/vk\.com\/([\w]+)/';
+    private $urlRegex = '/vk\.com\/([\w.]+)/';
 
     public function getURI()
     {
@@ -76,10 +77,10 @@ class VkBridge extends BridgeAbstract
                 break;
             }
         }
-        $pageName = $html->find('.page_name', 0);
+        $pageName = $html->find('meta[property="og:title"]', 0);
         if (is_object($pageName)) {
-            $pageName = $pageName->plaintext;
-            $this->pageName = htmlspecialchars_decode($pageName);
+            $pageName = $pageName->getAttribute('content');
+            $this->pageName = $pageName;
         }
         foreach ($html->find('div.replies') as $comment_block) {
             $comment_block->outertext = '';
@@ -158,8 +159,8 @@ class VkBridge extends BridgeAbstract
                     $article_author_selector = 'div.article_snippet__author';
                     $article_thumb_selector = 'div.article_snippet__image';
                 }
-                $article_title = $article->find($article_title_selector, 0)->innertext;
-                $article_author = $article->find($article_author_selector, 0)->innertext;
+                $article_title = $article->find($article_title_selector, 0)->innertext ?? '';
+                $article_author = $article->find($article_author_selector, 0)->innertext ?? '';
                 $article_link = $article->getAttribute('href');
                 $article_img_element_style = $article->find($article_thumb_selector, 0)->getAttribute('style');
                 preg_match('/background-image: url\((.*)\)/', $article_img_element_style, $matches);
@@ -314,6 +315,13 @@ class VkBridge extends BridgeAbstract
                 $copy_quote->outertext = "<br>Reposted ($copy_quote_author): <br>$copy_quote_content";
             }
 
+            foreach ($post->find('.PrimaryAttachment .PhotoPrimaryAttachment') as $pa) {
+                $img = $pa->find('.PhotoPrimaryAttachment__imageElement', 0);
+                if (is_object($img)) {
+                    $pa->outertext = $img->outertext;
+                }
+            }
+
             foreach ($post->find('.SecondaryAttachment') as $sa) {
                 $sa_href = $sa->getAttribute('href');
                 if (!$sa_href) {
@@ -453,7 +461,7 @@ class VkBridge extends BridgeAbstract
     {
         $content = explode('<br>', $content)[0];
         $content = strip_tags($content);
-        preg_match('/.+?(?=[\.\n])/mu', htmlspecialchars_decode($content), $result);
+        preg_match('/^[:\,"\w\ \p{L}\(\)\?#«»\-\–\—||&\.%\\₽\/+\;\!]+/mu', htmlspecialchars_decode($content), $result);
         if (count($result) == 0) {
             return 'untitled';
         }
@@ -515,7 +523,7 @@ class VkBridge extends BridgeAbstract
             }
 
             if (!preg_match('#^https?://vk.com/#', $uri)) {
-                returnServerError('Unexpected redirect location');
+                returnServerError('Unexpected redirect location: ' . $uri);
             }
 
             $redirects++;

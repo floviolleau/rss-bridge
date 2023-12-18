@@ -75,6 +75,33 @@ class RedditBridge extends BridgeAbstract
 
     public function collectData()
     {
+        $forbiddenKey = 'reddit_forbidden';
+        if ($this->cache->get($forbiddenKey)) {
+            throw new HttpException('403 Forbidden', 403);
+        }
+
+        $rateLimitKey = 'reddit_rate_limit';
+        if ($this->cache->get($rateLimitKey)) {
+            throw new HttpException('429 Too Many Requests', 429);
+        }
+
+        try {
+            $this->collectDataInternal();
+        } catch (HttpException $e) {
+            if ($e->getCode() === 403) {
+                // 403 Forbidden
+                // This can possibly mean that reddit has permanently blocked this server's ip address
+                $this->cache->set($forbiddenKey, true, 60 * 61);
+            }
+            if ($e->getCode() === 429) {
+                $this->cache->set($rateLimitKey, true, 60 * 16);
+            }
+            throw $e;
+        }
+    }
+
+    private function collectDataInternal(): void
+    {
         $user = false;
         $comments = false;
         $section = $this->getInput('d');
@@ -289,25 +316,30 @@ class RedditBridge extends BridgeAbstract
 
     public function detectParameters($url)
     {
-        $parsed_url = parse_url($url);
-
-        $host = $parsed_url['host'] ?? null;
-
-        if ($host != 'www.reddit.com' && $host != 'old.reddit.com') {
+        try {
+            $urlObject = Url::fromString($url);
+        } catch (UrlException $e) {
             return null;
         }
 
-        $path = explode('/', $parsed_url['path']);
+        $host = $urlObject->getHost();
+        $path = $urlObject->getPath();
 
-        if ($path[1] == 'r') {
+        $pathSegments = explode('/', $path);
+
+        if ($host !== 'www.reddit.com' && $host !== 'old.reddit.com') {
+            return null;
+        }
+
+        if ($pathSegments[1] == 'r') {
             return [
                 'context' => 'single',
-                'r' => $path[2]
+                'r' => $pathSegments[2],
             ];
-        } elseif ($path[1] == 'user') {
+        } elseif ($pathSegments[1] == 'user') {
             return [
                 'context' => 'user',
-                'u' => $path[2]
+                'u' => $pathSegments[2],
             ];
         } else {
             return null;
