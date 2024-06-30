@@ -1913,11 +1913,7 @@ class DealabsBridge extends PepperBridgeAbstract
         'uri-merchant' => 'search/bons-plans?merchant-id=',
         'request-error' => 'Impossible de joindre Dealabs',
         'thread-error' => 'Impossible de déterminer l\'ID de la discussion. Vérifiez l\'URL que vous avez entré',
-        'no-results' => 'Il n&#039;y a rien à afficher pour le moment :(',
         'currency' => '€',
-        'relative-date-indicator' => [
-            'il y a',
-        ],
         'price' => 'Prix',
         'shipping' => 'Livraison',
         'origin' => 'Origine',
@@ -1925,42 +1921,7 @@ class DealabsBridge extends PepperBridgeAbstract
         'title-keyword' => 'Recherche',
         'title-group' => 'Groupe',
         'title-talk' => 'Surveillance Discussion',
-        'local-months' => [
-            'janvier',
-            'février',
-            'mars',
-            'avril',
-            'mai',
-            'juin',
-            'juillet',
-            'août',
-            'septembre',
-            'octobre',
-            'novembre',
-            'décembre'
-        ],
-        'local-time-relative' => [
-            'il y a ',
-            'min',
-            'h',
-            'jour',
-            'jours',
-            'mois',
-            'ans',
-            'et '
-        ],
-        'date-prefixes' => [
-            'Actualisé ',
-        ],
-        'relative-date-alt-prefixes' => [
-            'Actualisé ',
-        ],
-        'relative-date-ignore-suffix' => [
-        ],
-
-        'localdeal' => [
-            'Local',
-            'Pays d\'expédition'
-        ],
+        'deal-type' => 'Type de deal',
+        'localdeal' => 'Deal Local',
     ];
 }
