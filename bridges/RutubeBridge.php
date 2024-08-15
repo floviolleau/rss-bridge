@@ -80,8 +80,10 @@ class RutubeBridge extends BridgeAbstract
             $videos = $reduxState->userChannel->videos->results;
             $this->title = $reduxState->userChannel->info->name;
         } elseif ($this->getInput('p')) {
-            $videos = $reduxState->playlist->data->results;
-            $this->title = $reduxState->playlist->title;
+            $playListVideosMethod = 'getPlaylistVideos(' . $this->getInput('p') . ')';
+            $videos = $reduxState->api->queries->$playListVideosMethod->data->results;
+            $playListMethod = 'getPlaylist(' . $this->getInput('p') . ')';
+            $this->title = $reduxState->api->queries->$playListMethod->data->title;
         } elseif ($this->getInput('s')) {
             $this->title = 'Поиск ' . $this->getInput('s');
         }
@@ -105,10 +107,10 @@ class RutubeBridge extends BridgeAbstract
         }
 
         foreach ($videos as $video) {
-            $item = new FeedItem();
-            $item->setTitle($video->title);
-            $item->setURI($video->video_url);
-            $content = '<a href="' . $item->getURI() . '">';
+            $item = [];
+            $item['title'] = $video->title;
+            $item['uri'] = $video->video_url;
+            $content = '<a href="' . $video->video_url . '">';
             $content .= '<img src="' . $video->thumbnail_url . '" />';
             $content .= '</a><br/>';
             $content .= nl2br(
@@ -120,9 +122,10 @@ class RutubeBridge extends BridgeAbstract
                     $video->description . ' '
                 )
             );
-            $item->setTimestamp($video->created_ts);
-            $item->setAuthor($video->author->name);
-            $item->setContent($content);
+            $item['timestamp'] = $video->created_ts;
+            $item['author'] = $video->author->name;
+            $item['content'] = $content;
+
             $this->items[] = $item;
         }
     }
