@@ -4,10 +4,13 @@ class HtmlFormat extends FormatAbstract
 {
     const MIME_TYPE = 'text/html';
 
-    public function stringify()
+    public function render(): string
     {
         // This query string is url encoded
         $queryString = $_SERVER['QUERY_STRING'];
+
+        // TODO: this should be the proper bridge short name and not user provided string
+        $bridgeName = $_GET['bridge'];
 
         $feedArray = $this->getFeed();
         $formatFactory = new FormatFactory();
@@ -48,16 +51,13 @@ class HtmlFormat extends FormatAbstract
         }
 
         $html = render_template(__DIR__ . '/../templates/html-format.html.php', [
-            'charset'       => $this->getCharset(),
+            'bridge_name'   => $bridgeName,
             'title'         => $feedArray['name'],
             'formats'       => $formats,
             'uri'           => $feedArray['uri'],
             'items'         => $items,
             'donation_uri'  => $donationUri,
         ]);
-        // Remove invalid characters
-        ini_set('mbstring.substitute_character', 'none');
-        $html = mb_convert_encoding($html, $this->getCharset(), 'UTF-8');
         return $html;
     }
 }

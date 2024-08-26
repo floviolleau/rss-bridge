@@ -62,8 +62,11 @@ register_shutdown_function(function () use ($logger) {
 
 $cacheFactory = new CacheFactory($logger);
 
-// Uncomment this for debug logging
-// $logger->addHandler(new StreamHandler('/tmp/rss-bridge.txt', Logger::DEBUG));
+// Uncomment this for info logging to fs
+// $logger->addHandler(new StreamHandler('/tmp/rss-bridge.txt', Logger::INFO));
+
+// Uncomment this for debug logging to fs
+// $logger->addHandler(new StreamHandler('/tmp/rss-bridge-debug.txt', Logger::DEBUG));
 
 if (Debug::isEnabled()) {
     $logger->addHandler(new ErrorLogHandler(Logger::DEBUG));
@@ -76,9 +79,17 @@ $httpClient = new CurlHttpClient();
 
 date_default_timezone_set(Configuration::getConfig('system', 'timezone'));
 
+$argv = $argv ?? null;
+if ($argv) {
+    parse_str(implode('&', array_slice($argv, 1)), $cliArgs);
+    $request = Request::fromCli($cliArgs);
+} else {
+    $request = Request::fromGlobals();
+}
+
 try {
     $rssBridge = new RssBridge($logger, $cache, $httpClient);
-    $response = $rssBridge->main($argv ?? []);
+    $response = $rssBridge->main($request);
     $response->send();
 } catch (\Throwable $e) {
     // Probably an exception inside an action
