@@ -61,7 +61,7 @@ class TelegramBridge extends BridgeAbstract
 
             $messages = $dom->find('div.tgme_widget_message_wrap.js-widget_message_wrap');
             if (!$channelTitle && !$messages) {
-                throw new \Exception('Unable to find channel. The channel is non-existing or non-public.');
+                throwClientException('Unable to find channel. The channel is non-existing or non-public.');
             }
 
             foreach (array_reverse($messages) as $message) {
@@ -92,7 +92,7 @@ class TelegramBridge extends BridgeAbstract
             }
         }
 
-        $this->logger->info(sprintf('Fetched %s messages from %s pages (%s)', count($this->items), $pages, $url));
+        $this->logger->debug(sprintf('Fetched %s messages from %s pages (%s)', count($this->items), $pages, $url));
 
         $this->items = array_reverse($this->items);
     }
@@ -104,7 +104,7 @@ class TelegramBridge extends BridgeAbstract
         $notSupported = $messageDiv->find('div.message_media_not_supported_wrap', 0);
         if ($notSupported) {
             // For unknown reasons, the telegram preview page omits the content of this post
-            $message = 'RSS-Bridge was unable to find the content of this post.<br><br>' . $notSupported->innertext;
+            $message = (string) $notSupported->innertext;
         }
 
         if ($messageDiv->find('div.tgme_widget_message_forwarded_from', 0)) {
@@ -400,7 +400,9 @@ EOD;
 
     private function normalizeUsername()
     {
-        return ltrim($this->getInput('username'), '@');
+        $username = trim($this->getInput('username'));
+
+        return ltrim($username, '@');
     }
 
     public function detectParameters($url)

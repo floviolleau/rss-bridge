@@ -12,7 +12,7 @@ class CacheFactory
         $this->logger = $logger;
     }
 
-    public function create(string $name = null): CacheInterface
+    public function create(?string $name = null): CacheInterface
     {
         $cacheNames = [];
         foreach (scandir(PATH_LIB_CACHES) as $file) {
@@ -92,6 +92,7 @@ class CacheFactory
                 if (empty($port)) {
                     throw new \Exception('"port" param is not set for ' . $section);
                 }
+                $port = (string) $port;
                 if (!ctype_digit($port)) {
                     throw new \Exception('"port" param is invalid for ' . $section);
                 }

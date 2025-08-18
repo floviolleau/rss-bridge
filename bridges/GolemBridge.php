@@ -132,13 +132,22 @@ class GolemBridge extends FeedExpander
         // delete known bad elements
         foreach (
             $article->find('div[id*="adtile"], #job-market, #seminars, iframe,
-			div.gbox_affiliate, div.toc') as $bad
+                        .gbox_affiliate, div.toc') as $bad
         ) {
             $bad->remove();
         }
         // reload html, as remove() is buggy
         $article = str_get_html($article->outertext);
 
+        // Add multipage headers, but only if they are different to the article header
+        $firstHeader = $page->find('.table-jtoc td', 0);
+        if (isset($firstHeader)) {
+            $firstHeader = html_entity_decode($firstHeader->title);
+        }
+        $multipageHeader = $article->find('header.paged-cluster-header h1', 0);
+        if (isset($multipageHeader) && $multipageHeader->plaintext !== $firstHeader) {
+            $item .= $multipageHeader;
+        }
 
         $header = $article->find('header', 0);
         foreach ($header->find('p, figure') as $element) {
@@ -152,7 +161,7 @@ class GolemBridge extends FeedExpander
             $img->src = $img->getAttribute('data-src-full');
         }
 
-        foreach ($content->find('p, h1, h2, h3, img[src*="."], iframe, video') as $element) {
+        foreach ($content->find('p, h1, h2, h3, pre, img[src*="."], div[class*="golem_tablediv"], iframe, video') as $element) {
             $item .= $element;
         }
 
