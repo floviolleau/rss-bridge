@@ -2,7 +2,7 @@
 class WawacityBridge extends BridgeAbstract {
 
 	const NAME = "Wawacity";
-	const URI = 'https://wawacity.homes';
+	const URI = 'https://wawacity.diy';
 	const DESCRIPTION = "Fetches the latest on wawacity";
 	const MAINTAINER = 'floviolleau';
     const PARAMETERS = [
