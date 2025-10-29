@@ -72,50 +72,62 @@ class GolemBridge extends FeedExpander
 
         while ($uri) {
             if (isset($urls[$uri])) {
-                // Prevent forever a loop
+                // Prevent loop in navigation links
                 break;
             }
             $urls[$uri] = true;
 
             $articlePage = getSimpleHTMLDOMCached($uri, static::CACHE_TIMEOUT, static::HEADERS);
+            $articlePage = defaultLinkTo($articlePage, $uri);
 
             // URI without RSS feed reference
             $item['uri'] = $articlePage->find('head meta[name="twitter:url"]', 0)->content;
 
-            $categories = $articlePage->find('ul.tags__list li');
-            foreach ($categories as $category) {
-                $trimmedcategories[] = trim(html_entity_decode($category->plaintext));
+            // extract categories
+            if (!array_key_exists('categories', $item)) {
+                $categories = $articlePage->find('div.go-tag-list__tags a.go-tag');
+                foreach ($categories as $category) {
+                    $trimmedcategories[] = trim(html_entity_decode($category->plaintext));
+                }
+                if (isset($trimmedcategories)) {
+                    $item['categories'] = array_unique($trimmedcategories);
+                }
             }
-            if (isset($trimmedcategories)) {
-                $item['categories'] = array_unique($trimmedcategories);
-            }
-
-            $item['content'] .= $this->extractContent($articlePage);
 
             // next page
-            $nextUri = $articlePage->find('link[rel="next"]', 0);
-            $uri = $nextUri ? static::URI . $nextUri->href : null;
+            $nextUri = $articlePage->find('li.go-pagination__item--next a', 0);
+            if ($nextUri) {
+                $uri = $nextUri->href;
+            } else {
+                $uri = null;
+            }
+
+            // Only extract the content (and remove content) after all pre-processing is done
+            $item['content'] .= $this->extractContent($articlePage, $item['content']);
         }
 
         return $item;
     }
 
-    private function extractContent($page)
+    private function extractContent($page, $prevcontent)
     {
         $item = '';
 
         $article = $page->find('article', 0);
 
         //built youtube iframes
-        foreach ($article->find('.embedcontent') as &$embedcontent) {
-            $ytscript = $embedcontent->find('script', 0);
-            if (preg_match('/(www.youtube.com.*?)\"/', $ytscript->innertext, $link)) {
-                $link = 'https://' . str_replace('\\', '', $link[1]);
-                $embedcontent->innertext .= <<<EOT
-                    <iframe width="560" height="315" src="$link" title="YouTube video player" frameborder="0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>';
-                EOT;
+        $placeholders = $article->find('.go-embed-container');
+        foreach (range(0, count($placeholders) - 1) as $i) {
+            foreach ($page->find('script') as $ytscript) {
+                if (preg_match_all('/(www.youtube.com.*?)\"/', $ytscript->innertext, $link)) {
+                    $link = 'https://' . str_replace('\\', '', $link[1][$i]);
+                    $placeholders[$i]->innertext .= <<<EOT
+                        <iframe width="560" height="315" src="$link" title="YouTube video player" frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>';
+                    EOT;
+                    break;
+                }
             }
         }
 
@@ -129,10 +141,11 @@ class GolemBridge extends FeedExpander
             }
         }
 
-        // delete known bad elements
+        // delete known bad elements and unwanted gallery images
         foreach (
-            $article->find('div[id*="adtile"], #job-market, #seminars, iframe,
-                        .gbox_affiliate, div.toc') as $bad
+            $article->find('div[id*="adtile"], #job-market, #seminars, iframe, .go-article-header__title, .go-article-header__kicker, .go-label--sponsored,
+                        .gbox_affiliate, div.toc, .go-button-bar, .go-alink-list, .go-teaser-block, .go-vh, .go-paywall, .go-index, .go-pagination__list,
+                        .go-gallery .[data-active="false"], .go-article-header__series') as $bad
         ) {
             $bad->remove();
         }
@@ -150,19 +163,19 @@ class GolemBridge extends FeedExpander
         }
 
         $header = $article->find('header', 0);
-        foreach ($header->find('p, figure') as $element) {
-            $item .= $element;
+        if (isset($header)) {
+            foreach ($header->find('p, figure') as $element) {
+                $item .= $element;
+            }
         }
 
-        $content = $article->find('div.formatted', 0);
-
-        // full image quality
-        foreach ($content->find('img[data-src-full][src*="."]') as $img) {
-            $img->src = $img->getAttribute('data-src-full');
-        }
-
-        foreach ($content->find('p, h1, h2, h3, pre, img[src*="."], div[class*="golem_tablediv"], iframe, video') as $element) {
-            $item .= $element;
+        foreach (
+            $article->find('div.go-article-header__intro, p, h1, h2, h3, pre, ul, ol, .go-media img[src*="."], .go-media figcaption,
+                    table, iframe, video') as $element
+        ) {
+            if (!str_contains($prevcontent, $element)) {
+                $item .= $element;
+            }
         }
 
         return $item;
