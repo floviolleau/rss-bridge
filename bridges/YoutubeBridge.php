@@ -2,9 +2,9 @@
 
 class YoutubeBridge extends BridgeAbstract
 {
-    const NAME = 'YouTube Bridge';
+    const NAME = 'YouTube';
     const URI = 'https://www.youtube.com';
-    const CACHE_TIMEOUT = 60 * 60 * 3;
+    const CACHE_TIMEOUT = 60 * 60 * 3; // 3 hours
     const DESCRIPTION = 'Returns the 10 newest videos by username/channel/playlist or search';
 
     const PARAMETERS = [
@@ -183,8 +183,14 @@ class YoutubeBridge extends BridgeAbstract
             });
         } elseif ($search) {
             // search
-            $url_listing = self::URI . '/results?search_query=' . urlencode($search) . '&sp=CAI%253D';
-            $html = $this->fetch($url_listing);
+            $today_filter = 'EgIIAg'; // restrict the upload date to the last 24 hours
+            $url_listing = self::URI . '/results?sp=' . $today_filter . '&search_query=' . urlencode($search);
+            if (!preg_match("/\b(before|after):/i", $search)) {
+                // unless explicitly overridden, a special "after:yyyy-mm-dd" keyword is appended to restrict the upload date to the last 6-30 hours
+                $html = $this->fetch($url_listing . urlencode(' after:' . date('Y-m-d', strtotime('-6 hours'))));
+            } else {
+                $html = $this->fetch($url_listing);
+            }
             $jsonData = $this->extractJsonFromHtml($html);
             $jsonData = $jsonData->contents->twoColumnSearchResultsRenderer->primaryContents;
             $jsonData = $jsonData->sectionListRenderer->contents[0]->itemSectionRenderer->contents;
@@ -435,8 +441,14 @@ class YoutubeBridge extends BridgeAbstract
                 $wrapper = $item->videoRenderer;
             } elseif (isset($item->playlistVideoRenderer)) {
                 $wrapper = $item->playlistVideoRenderer;
-            } elseif (isset($item->richItemRenderer)) {
+            } elseif (isset($item->richItemRenderer->content->videoRenderer)) {
                 $wrapper = $item->richItemRenderer->content->videoRenderer;
+            } elseif (isset($item->richItemRenderer->content->lockupViewModel)) {
+                // Newer YouTube layout: richItemRenderer can wrap a lockupViewModel rather than a videoRenderer.
+                $wrapper = $this->wrapLockupViewModel($item->richItemRenderer->content->lockupViewModel);
+                if ($wrapper === null) {
+                    continue;
+                }
             } else {
                 continue;
             }
@@ -495,6 +507,33 @@ class YoutubeBridge extends BridgeAbstract
                 break;
             }
         }
+    }
+
+    private function wrapLockupViewModel($lockup)
+    {
+        $videoId = $lockup->contentId ?? null;
+        $title = $lockup->metadata->lockupMetadataViewModel->title->content ?? null;
+        if (!$videoId || !$title) {
+            return null;
+        }
+
+        $wrapper = new \stdClass();
+        $wrapper->videoId = $videoId;
+        $wrapper->title = (object) ['runs' => [(object) ['text' => $title]]];
+        $wrapper->thumbnailOverlays = [];
+
+        // Duration sits on a thumbnail badge such as "12:07".
+        foreach ($lockup->contentImage->thumbnailViewModel->overlays ?? [] as $overlay) {
+            foreach ($overlay->thumbnailBottomOverlayViewModel->badges ?? [] as $badge) {
+                $text = $badge->thumbnailBadgeViewModel->text ?? null;
+                if (is_string($text) && preg_match('/^\d{1,2}(:\d{2}){1,2}$/', $text)) {
+                    $wrapper->lengthText = (object) ['simpleText' => $text];
+                    break 2;
+                }
+            }
+        }
+
+        return $wrapper;
     }
 
     private function addItem($videoId, $title, $author, $description, $timestamp, $thumbnail = '')
