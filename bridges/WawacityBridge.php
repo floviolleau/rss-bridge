@@ -140,7 +140,7 @@ class WawacityBridge extends BridgeAbstract
         }
         $url = $this->baseUri . '/?' . $query;
 
-        $html = getSimpleHTMLDOM($url, self::REQUEST_HEADERS) or throwServerException('Could not request ' . $url);
+        $html = getSimpleHTMLDOM($url, self::REQUEST_HEADERS);
 
         $elementsDom = $html->find('#wa-mid-blocks .wa-post-detail-item');
         foreach ($elementsDom as $elementDom) {
