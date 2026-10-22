@@ -47,13 +47,22 @@ function getContents(
     /** @var CacheInterface $cache */
     $cache = $container['cache'];
 
-    // TODO: consider url validation at this point
+    $url = Url::normalizeScheme($url);
+
+    if (! Url::validate($url)) {
+        throw new \Exception(sprintf('Invalid URL: %s', $url));
+    }
+
+    $urlObject = Url::fromString($url);
+    $urlNormalized = $urlObject->normalize();
 
     $config = [
         'useragent'     => Configuration::getConfig('http', 'useragent'),
         'timeout'       => Configuration::getConfig('http', 'timeout'),
         'retries'       => Configuration::getConfig('http', 'retries'),
         'curl_options'  => $curlOptions,
+        'follow'        => Configuration::getConfig('http', 'follow'),
+        'dns'           => [],
     ];
 
     $httpHeadersNormalized = [];
@@ -101,7 +110,29 @@ function getContents(
         $config['proxy'] = Configuration::getConfig('proxy', 'url');
     }
 
-    $response = $httpClient->request($url, $config);
+    $host = $urlObject->getHost();
+    if (Ipv4Address::validate($host)) {
+        $ip = Ipv4Address::fromString($host);
+    } else {
+        // Prevent DNS-rebinding
+        $records = fetch_dns_record($host);
+        $record = $records[array_rand($records)];
+        $ip = $record['ip'];
+        $ip = Ipv4Address::fromString($ip);
+        $config['dns'] = [
+            sprintf('%s:%s:%s', $host, $urlObject->getPort(), $ip),
+        ];
+    }
+
+    if (! Configuration::getConfig('http', 'allow_private_addresses') && $ip->isPrivate()) {
+        throw new Exception(sprintf('Private addresses disallowed: %s (%s)', $ip, $host));
+    }
+
+    if (! Configuration::getConfig('http', 'allow_reserved_addresses') && $ip->isReserved()) {
+        throw new Exception(sprintf('Reserved addresses disallowed: %s (%s)', $ip, $host));
+    }
+
+    $response = $httpClient->request($urlNormalized, $config);
 
     switch ($response->getCode()) {
         case 200:
@@ -121,8 +152,7 @@ function getContents(
         case 301:
         case 302:
         case 303:
-            // todo: cache
-            break;
+            throw HttpException::fromResponse($response, $url);
         case 304:
             // Not Modified
             $response = $response->withBody($cachedResponse->getBody());

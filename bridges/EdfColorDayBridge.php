@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 class EdfColorDayBridge extends BridgeAbstract
 {
     const NAME = 'EDF tempo color';
@@ -36,7 +38,6 @@ class EdfColorDayBridge extends BridgeAbstract
         ];
 
         foreach ($values as $key => $value) {
-            $i++;
             $item = [];
 
             $text = $key . ' : ' . $this->getDisplayableColor($jsonDecoded['values'][$value]);
@@ -52,17 +53,25 @@ class EdfColorDayBridge extends BridgeAbstract
 
     private function formatFrenchDate(string $datetime): string
     {
-        // Set the locale to French
-        setlocale(LC_TIME, 'fr_FR.UTF-8');
+        // Set the locale and date format
+        $locale = 'fr_FR';
+        $formatter = new IntlDateFormatter(
+            $locale,
+            IntlDateFormatter::FULL, // Full date format
+            IntlDateFormatter::NONE,  // No time
+            null,                     // Default timezone
+            IntlDateFormatter::GREGORIAN, // Gregorian calendar
+            'EEEE dd MMMM yyyy'      // Custom pattern
+        );
 
         // Create a DateTime object for the desired date
         $now = new DateTime($datetime);
 
         // Format the date
-        return strftime('%A %d %B %Y', $now->getTimestamp());
+        return $formatter->format($now);
     }
 
-    private function getDisplayableColor(string $color): string
+    private function getDisplayableColor(?string $color): string
     {
         $displayableColor = null;
         switch ($color) {
@@ -101,7 +110,7 @@ class EdfColorDayBridge extends BridgeAbstract
         $contract = $this->getKey('contract');
 
         $header = [
-            'Content-type: application/json',
+            'Accept: application/json',
         ];
         $opts = [
             CURLOPT_HTTPGET => 1,

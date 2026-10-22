@@ -61,6 +61,11 @@ class YoutubeBridge extends BridgeAbstract
                 'type' => 'number',
                 'title' => 'Maximum duration for the video in minutes',
                 'exampleValue' => 10
+            ],
+            'skip_members_only' => [
+                'name' => 'Skip members-only videos',
+                'type' => 'checkbox',
+                'title' => 'Hide videos that require a channel membership to watch'
             ]
         ]
     ];
@@ -121,12 +126,27 @@ class YoutubeBridge extends BridgeAbstract
             // user, channel or custom
             $this->feeduri = $url_listing;
             if ($custom) {
-                // Extract the feed url for the custom name
-                $html = $this->fetch($url_listing);
-                $jsonData = $this->extractJsonFromHtml($html);
-                // Pluck out the rss feed url
-                $url_feed = $jsonData->metadata->channelMetadataRenderer->rssUrl;
-                $this->feedIconUrl = $jsonData->metadata->channelMetadataRenderer->avatar->thumbnails[0]->url;
+                // Check if RSS feed data is already available in cache
+                $customFeedCacheKey = 'youtube_custom_feed_' . strtolower($custom);
+                $customFeedRssData = $this->cache->get($customFeedCacheKey);
+                if (is_array($customFeedRssData) && !$filterByDuration) {
+                    // Only use the cached feed if not filtering by duration
+                    $url_feed = $customFeedRssData['url_feed'];
+                    $this->feedIconUrl = $customFeedRssData['feed_icon_url'];
+                } else {
+                    // Extract the feed url for the custom name
+                    $html = $this->fetch($url_listing);
+                    $jsonData = $this->extractJsonFromHtml($html);
+                    // Pluck out the rss feed url
+                    $url_feed = $jsonData->metadata->channelMetadataRenderer->rssUrl;
+                    $this->feedIconUrl = $jsonData->metadata->channelMetadataRenderer->avatar->thumbnails[0]->url;
+                    // Only cache the data if it was successfully extracted
+                    // Otherwise a single unexpected response could block future attempts to fetch the feed
+                    if ($url_feed && $this->feedIconUrl) {
+                        $customFeedRssData = ['url_feed' => $url_feed, 'feed_icon_url' => $this->feedIconUrl];
+                        $this->cache->set($customFeedCacheKey, $customFeedRssData, 30 * 24 * 60 * 60);
+                    }
+                }
             }
             if ($filterByDuration) {
                 if (!$custom) {
@@ -146,7 +166,10 @@ class YoutubeBridge extends BridgeAbstract
                 }
             } else {
                 // Fetch the xml feed
-                $html = $this->fetch($url_feed);
+                $html = $this->fetchFeed($url_feed);
+                if (!$html) {
+                    return;
+                }
                 $this->extractItemsFromXmlFeed($html);
             }
             $this->feedName = str_replace(' - YouTube', '', $html->find('title', 0)->plaintext);
@@ -163,15 +186,24 @@ class YoutubeBridge extends BridgeAbstract
                 // playlist probably doesnt exists
                 throw new \Exception('Unable to find playlist: ' . $url_listing);
             }
-            $jsonData = $jsonData->tabRenderer->content->sectionListRenderer->contents[0]->itemSectionRenderer;
-            $jsonData = $jsonData->contents[0]->playlistVideoListRenderer->contents;
+
+            // Keeping the old JSON paths just in case YouTube is using them for some pages
+            if (isset($jsonData->tabRenderer->content->sectionListRenderer->contents[0]->itemSectionRenderer->contents[0]->playlistVideoListRenderer)) {
+                $jsonData = $jsonData->tabRenderer->content->sectionListRenderer->contents[0]->itemSectionRenderer;
+                $jsonData = $jsonData->contents[0]->playlistVideoListRenderer->contents;
+            } elseif (isset($jsonData->tabRenderer->content->sectionListRenderer->contents[0]->itemSectionRenderer->contents)) {
+                $jsonData = $jsonData->tabRenderer->content->sectionListRenderer->contents[0]->itemSectionRenderer->contents;
+            }
+
             $item_count = count($jsonData);
 
             if ($item_count > 15 || $filterByDuration) {
                 $this->fetchItemsFromFromJsonData($jsonData);
             } else {
-                $xml = $this->fetch($url_feed);
-                $this->extractItemsFromXmlFeed($xml);
+                $xml = $this->fetchFeed($url_feed);
+                if ($xml) {
+                    $this->extractItemsFromXmlFeed($xml);
+                }
             }
             $this->feedName = 'Playlist: ' . str_replace(' - YouTube', '', $html->find('title', 0)->plaintext);
             usort($this->items, function ($item1, $item2) {
@@ -407,7 +439,8 @@ class YoutubeBridge extends BridgeAbstract
 
     private function fetch($url, bool $cache = false)
     {
-        $header = ['Accept-Language: en-US'];
+        // "SOCS=CAI" pre-accepts all cookies to avoid redirects to "consent.youtube.com".
+        $header = ['Accept-Language: en-US', 'Cookie: SOCS=CAI'];
         $ttl = 86400 * 3; // 3d
         $stripNewlines = false;
         if ($cache) {
@@ -416,10 +449,28 @@ class YoutubeBridge extends BridgeAbstract
         return getSimpleHTMLDOM($url, $header, [], true, true, DEFAULT_TARGET_CHARSET, $stripNewlines);
     }
 
+    private function fetchFeed($url)
+    {
+        try {
+            return $this->fetch($url);
+        } catch (HttpException $e) {
+            // The feeds/videos.xml endpoint returns 404 intermittently, so return no items instead of an error
+            if ($e->getCode() === 404) {
+                return null;
+            }
+            throw $e;
+        }
+    }
+
     private function extractJsonFromHtml($html)
     {
+        // The JSON payload now has the potential to exceed 1 million characters.
+        // This hits the default PCRE backtracking limit. Bypassing this by temporarily upping the limit.
+        $previousBacktrackLimit = ini_get('pcre.backtrack_limit');
+        ini_set('pcre.backtrack_limit', '10000000');
         $scriptRegex = '/var ytInitialData = (.*?);<\/script>/';
         $result = preg_match($scriptRegex, $html, $matches);
+        ini_set('pcre.backtrack_limit', $previousBacktrackLimit);
         if (! $result) {
             $this->logger->debug('Could not find ytInitialData');
             return null;
@@ -446,6 +497,12 @@ class YoutubeBridge extends BridgeAbstract
             } elseif (isset($item->richItemRenderer->content->lockupViewModel)) {
                 // Newer YouTube layout: richItemRenderer can wrap a lockupViewModel rather than a videoRenderer.
                 $wrapper = $this->wrapLockupViewModel($item->richItemRenderer->content->lockupViewModel);
+                if ($wrapper === null) {
+                    continue;
+                }
+            } elseif (isset($item->lockupViewModel)) {
+                // Newer YouTube layout: lockupViewModel can also be a direct child of itemSectionRenderer->contents.
+                $wrapper = $this->wrapLockupViewModel($item->lockupViewModel);
                 if ($wrapper === null) {
                     continue;
                 }
@@ -515,6 +572,17 @@ class YoutubeBridge extends BridgeAbstract
         $title = $lockup->metadata->lockupMetadataViewModel->title->content ?? null;
         if (!$videoId || !$title) {
             return null;
+        }
+
+        if ($this->getInput('skip_members_only')) {
+            $rows = $lockup->metadata->lockupMetadataViewModel->metadata->contentMetadataViewModel->metadataRows ?? [];
+            foreach ($rows as $row) {
+                foreach ($row->badges ?? [] as $badge) {
+                    if (($badge->badgeViewModel->badgeStyle ?? null) === 'BADGE_MEMBERS_ONLY') {
+                        return null;
+                    }
+                }
+            }
         }
 
         $wrapper = new \stdClass();

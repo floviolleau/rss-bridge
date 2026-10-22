@@ -43,10 +43,10 @@ max_file_size = 10000000
 [http]
 
 ; Operation timeout in seconds
-timeout = 5
+timeout = 3
 
 ; Operation retry count in case of curl error
-retries = 1
+retries = 0
 
 ; Curl user agent
 ; This is already set by curl-impersonate, which comes included as default 
@@ -56,6 +56,15 @@ retries = 1
 
 ; Max http response size in MB
 max_filesize = 20
+
+; Whether to follow location (careful: enabling this allows SSRF attack)
+follow = false;
+
+; 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+allow_private_addresses = false
+
+; 0.0.0.0/8, 169.254.0.0/16, 127.0.0.0/8, 240.0.0.0/4
+allow_reserved_addresses = false
 
 [cache]
 
@@ -176,10 +185,29 @@ port = 11211
 
 ; --- Bridge specific configuration ------
 
+[GithubIssueBridge]
+; Personal access token (fine-grained or classic)
+token = ""
+
+[GitHubPullRequestBridge]
+; Personal access token (fine-grained or classic)
+token = ""
+
 [TelegramBridge]
 
 ; Max pages to fetch (1 page => 20 messages), min=1 max=100
 max_pages = 1
+
+[LiveTennisApiBridge]
+
+; Sets the Live Tennis API key the bridge authenticates with. Without one the
+; bridge reports a configuration error instead of producing a feed.
+;
+; Keys are issued at https://livetennisapi.com/. The free tier allows 100
+; requests a day, which the bridge's 15 minute cache timeout stays inside.
+;
+; "" = no key, bridge disabled (default)
+api_key = ""
 
 [DiscogsBridge]
 
